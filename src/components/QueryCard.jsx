@@ -1,0 +1,76 @@
+import { Car, User, AlertTriangle, Eye } from "lucide-react";
+import { motion as Motion } from "framer-motion";
+import StatusBadge from "./StatusBadge";
+
+export default function QueryCard({ item, onViewDetail }) {
+  const status = item.ok ? "success" : "error";
+  const label = item.ok ? "Consultada exitosamente" : "Sin información encontrada";
+
+  return (
+    <Motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 hover:shadow-lg transition"
+    >
+      <div className="flex justify-between items-start gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
+            <Car size={22} />
+          </div>
+
+          <div>
+            <p className="text-xs text-slate-500">Placa</p>
+            <h3 className="text-2xl font-bold text-slate-900">{item.placa}</h3>
+          </div>
+        </div>
+
+        <StatusBadge status={status}>{label}</StatusBadge>
+      </div>
+
+      {item.error && (
+        <div className="mt-4 flex gap-2 text-sm text-red-700 bg-red-50 rounded-2xl p-3">
+          <AlertTriangle size={18} />
+          <span>{item.error}</span>
+        </div>
+      )}
+
+      {item.propietario && (
+        <div className="mt-4 bg-slate-50 rounded-2xl p-4 text-sm text-slate-600">
+          <div className="flex items-center gap-2 font-semibold text-slate-800 mb-2">
+            <User size={17} />
+            Propietario
+          </div>
+          <p>{item.propietario.nombre_completo || "No disponible"}</p>
+          <p className="text-slate-500">
+            {item.propietario.tipo_documento} {item.propietario.numero_documento}
+          </p>
+        </div>
+      )}
+
+      {item.datos_vehiculo && (
+        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+          {[
+            ["Marca", item.datos_vehiculo.marca],
+            ["Línea", item.datos_vehiculo.linea],
+            ["Modelo", item.datos_vehiculo.modelo],
+            ["Servicio", item.datos_vehiculo.servicio]
+          ].map(([label, value]) => (
+            <div key={label} className="bg-slate-50 rounded-2xl p-3">
+              <p className="text-xs text-slate-400">{label}</p>
+              <p className="font-semibold text-slate-800">{value || "N/D"}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        onClick={() => onViewDetail(item)}
+        className="mt-5 w-full bg-slate-900 hover:bg-blue-700 text-white rounded-2xl py-3 text-sm transition flex items-center justify-center gap-2"
+      >
+        <Eye size={17} />
+        Ver detalle
+      </button>
+    </Motion.div>
+  );
+}

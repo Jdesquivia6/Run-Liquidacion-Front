@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  --text: #6b6375;
+  --text-h: #08060d;
+  --bg: #fff;
+  --border: #e5e4e7;
+  --code-bg: #f4f3ec;
+  --accent: #aa3bff;
+  --accent-bg: rgba(170, 59, 255, 0.1);
+  --accent-border: rgba(170, 59, 255, 0.5);
+
+  font-size: 16px;
+  line-height: 1.45;
+  letter-spacing: 0.18px;
+
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* RESET GLOBAL */
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+/* IMPORTANTE PARA DASHBOARD */
+
+#root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* BODY */
+
+body {
+  background: #f1f5f9;
+  overflow-x: hidden;
+  margin: 0;
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* BOX MODEL */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+
+.swiper-pagination-progressbar {
+  background: #e2e8f0 !important;
+  height: 4px !important;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.swiper-pagination-progressbar-fill {
+  background: #2563eb !important;
+}
+
+.swiper-button-next,
+.swiper-button-prev {
+  color: #0f172a !important;
+  background: white;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.swiper-button-next::after,
+.swiper-button-prev::after {
+  font-size: 14px !important;
+  font-weight: bold;
+}
