@@ -205,33 +205,37 @@ export default function RecuperarPassword() {
             <>
               {/* Header */}
               <div className="text-center mb-8">
-                {/* Icono de recuperación/email */}
-                <motion.div
-                  className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E9F1FA] to-[#00ABE4]/10 border-2 border-[#00ABE4]/20 mb-6"
-                  animate={{
-                    boxShadow: [
-                      "0 0 0 0 rgba(0, 171, 228, 0.2)",
-                      "0 0 0 8px rgba(0, 171, 228, 0)",
-                    ]
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeOut"
-                  }}
-                >
-                  <motion.svg
-                    className="w-10 h-10 text-[#00ABE4]"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    animate={{ scale: [1, 1.02, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
+                {/* Logo clickeable que redirige al Landing */}
+                <Link to="/" className="inline-block">
+                  <motion.div
+                    className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E9F1FA] to-[#00ABE4]/10 border-2 border-[#00ABE4]/20 mb-6 cursor-pointer"
+                    animate={{
+                      boxShadow: [
+                        "0 0 0 0 rgba(0, 171, 228, 0.2)",
+                        "0 0 0 8px rgba(0, 171, 228, 0)",
+                      ]
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeOut"
+                    }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5A2.25 2.25 0 002.25 6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                  </motion.svg>
-                </motion.div>
+                    <motion.svg
+                      className="w-10 h-10 text-[#00ABE4]"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      animate={{ scale: [1, 1.02, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                    </motion.svg>
+                  </motion.div>
+                </Link>
 
                 <h1 className="text-3xl sm:text-4xl font-bold text-[#1e293b] mb-2">
                   Recuperar Contraseña

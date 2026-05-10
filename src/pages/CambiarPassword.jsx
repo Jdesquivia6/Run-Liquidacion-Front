@@ -1,9 +1,9 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { cambiarMiPasswordRequest } from "../services/authApi";
 import { useAuth } from "../auth/AuthContext";
-import { useNavigate } from "react-router-dom";
 
 export default function CambiarPassword() {
   const navigate = useNavigate();
@@ -218,33 +218,37 @@ export default function CambiarPassword() {
 
           {/* Header */}
           <div className="text-center mb-8">
-            {/* Icono de escudo/bloqueo con animación de pulso */}
-            <motion.div
-              className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E9F1FA] to-[#00ABE4]/10 border-2 border-[#00ABE4]/20 mb-6"
-              animate={{
-                boxShadow: [
-                  "0 0 0 0 rgba(0, 171, 228, 0.2)",
-                  "0 0 0 8px rgba(0, 171, 228, 0)",
-                ]
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeOut"
-              }}
-            >
-              <motion.svg
-                className="w-10 h-10 text-[#00ABE4]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                animate={{ scale: [1, 1.02, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
+            {/* Logo clickeable que redirige al Landing */}
+            <Link to="/" className="inline-block">
+              <motion.div
+                className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E9F1FA] to-[#00ABE4]/10 border-2 border-[#00ABE4]/20 mb-6 cursor-pointer"
+                animate={{
+                  boxShadow: [
+                    "0 0 0 0 rgba(0, 171, 228, 0.2)",
+                    "0 0 0 8px rgba(0, 171, 228, 0)",
+                  ]
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeOut"
+                }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-              </motion.svg>
-            </motion.div>
+                <motion.svg
+                  className="w-10 h-10 text-[#00ABE4]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  animate={{ scale: [1, 1.02, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                </motion.svg>
+              </motion.div>
+            </Link>
 
             <h1 className="text-3xl sm:text-4xl font-bold text-[#1e293b] mb-2">
               Nueva Contraseña

@@ -142,6 +142,9 @@ export default function ConsultaPlaca() {
       if (refrescarPendientesActual) {
         await refrescarPendientesActual();
       }
+
+      // Limpiar plaques después de consultar
+      setPlacas("");
     } catch (err) {
       toast.error("Error en la consulta");
       setError(err.response?.data?.error || err.message || "Error en la consulta");

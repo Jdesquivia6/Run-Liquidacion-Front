@@ -88,6 +88,9 @@ export default function DatosVehiculo() {
       if (refrescarPendientesActual) {
         await refrescarPendientesActual();
       }
+
+      // Limpiar plaques después de consultar
+      setPlacas("");
     } catch (err) {
       toast.error("Error consultando datos del vehículo");
       setError(err.response?.data?.error || err.message || "Error en la consulta");

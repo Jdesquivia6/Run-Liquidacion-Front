@@ -59,3 +59,17 @@ export async function obtenerDashboard({ fechaInicio, fechaFin } = {}) {
 
   return response.data;
 }
+
+export function exportarDashboardExcel({ fechaInicio, fechaFin } = {}) {
+  const params = new URLSearchParams();
+
+  if (fechaInicio && fechaFin) {
+    params.append("fechaInicio", fechaInicio);
+    params.append("fechaFin", fechaFin);
+  }
+
+  window.open(
+    `${API_BASE}/dashboard/exportar-excel?${params.toString()}`,
+    "_blank"
+  );
+}

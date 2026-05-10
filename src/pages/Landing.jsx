@@ -114,7 +114,7 @@ function ServiceCard({ icon: Icon, title, description, delay }) {
           <Icon className="w-7 h-7 text-[#00ABE4]" />
         </div>
         <h3 className="text-lg font-semibold text-gray-800 mb-2">{title}</h3>
-        <p className="text-gray-500 text-sm leading-relaxed">{description}</p>
+        <p className="text-gray-600 text-sm leading-relaxed">{description}</p>
       </motion.div>
     </FadeIn>
   );
@@ -291,7 +291,7 @@ function Hero() {
                 Centro inteligente de operaciones vehiculares
               </p>
 
-              <p className="text-gray-500 mb-8">
+              <p className="text-gray-600 mb-8">
                 Plataforma de inteligencia vehicular diseñada para centralizar consultas,
                 automatizar procesos y optimizar operaciones mediante tecnología avanzada.
               </p>
@@ -485,7 +485,7 @@ function Services() {
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-800 mb-4">
               Soluciones Completas para Gestión Vehicular
             </h2>
-            <p className="text-gray-500 max-w-2xl mx-auto text-lg">
+            <p className="text-gray-600 max-w-2xl mx-auto text-lg">
               Ofrecemos un conjunto integral de herramientas para optimizar tus procesos
               de liquidación y consulta vehicular.
             </p>
@@ -571,7 +571,7 @@ function About() {
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-800 mb-6">
                 Facilitando la Gestión Vehicular en Colombia
               </h2>
-              <p className="text-gray-500 text-lg mb-8 leading-relaxed">
+              <p className="text-gray-600 text-lg mb-8 leading-relaxed">
                   Brindar soluciones tecnológicas confiables para la gestión vehicular,
                   garantizando transparencia, eficiencia y seguridad en cada transacción.
                   Proporcionamos información precisa y actualizada.
@@ -583,7 +583,7 @@ function About() {
                   <span className="w-2 h-2 rounded-full bg-[#00ABE4]" />
                   Misión
                 </h3>
-                <p className="text-gray-500 ml-4">
+                <p className="text-gray-600 ml-4">
                   Brindar soluciones tecnológicas confiables para la gestión vehicular,
                   garantizando transparencia, eficiencia y seguridad en cada transacción.
                 </p>
@@ -595,7 +595,7 @@ function About() {
                   <span className="w-2 h-2 rounded-full bg-[#00ABE4]" />
                   Visión
                 </h3>
-                <p className="text-gray-500 ml-4">
+                <p className="text-gray-600 ml-4">
                   Ser la plataforma líder en gestión vehicular en Colombia,
                   innovando constantemente para superar las expectativas de nuestros usuarios.
                 </p>
@@ -640,7 +640,7 @@ function About() {
                   <h3 className="text-2xl font-bold text-gray-800 mb-2">
                     Auto<span className="text-[#00ABE4]">Core</span>
                   </h3>
-                  <p className="text-gray-500 text-sm mb-6">
+                  <p className="text-gray-600 text-sm mb-6">
                     Plataforma Oficial de Gestión Vehicular
                   </p>
 
@@ -829,7 +829,7 @@ function Footer() {
 
         {/* Copyright y botón volver arriba */}
         <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-gray-500 text-sm">
+          <p className="text-gray6500 text-sm">
             © 2026 AutoCore. Todos los derechos reservados.
           </p>
 
