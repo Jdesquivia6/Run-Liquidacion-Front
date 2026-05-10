@@ -144,12 +144,13 @@ export default function LiquidarRunt() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-[#E9F1FA]">
       <Header />
 
       <div className="max-w-6xl mx-auto p-6 space-y-6">
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-xl font-semibold mb-6 text-gray-700">
+        {/* Información Básica */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 animate-slide-up">
+          <h2 className="text-xl font-bold text-[#1e293b] mb-6">
             Información Básica
           </h2>
 
@@ -198,8 +199,9 @@ export default function LiquidarRunt() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-xl font-semibold mb-6 text-gray-700">
+        {/* Trámites a liquidar */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 animate-slide-up" style={{ animationDelay: "0.1s" }}>
+          <h2 className="text-xl font-bold text-[#1e293b] mb-6">
             Trámites a liquidar
           </h2>
 
@@ -268,35 +270,41 @@ export default function LiquidarRunt() {
           <div className="mt-6">
             <button
               onClick={agregarTramite}
-              className="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2 rounded-xl"
+              className="bg-[#334155] hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
             >
               Agregar trámite
             </button>
           </div>
         </div>
 
-        <TramitesTable
-          tramites={tramitesAgregados}
-          onRemove={eliminarTramite}
-        />
+        {/* Tabla de trámites */}
+        <div className="animate-slide-up" style={{ animationDelay: "0.2s" }}>
+          <TramitesTable
+            tramites={tramitesAgregados}
+            onRemove={eliminarTramite}
+          />
+        </div>
 
+        {/* Mensaje de error */}
         {error && (
-          <div className="bg-red-100 text-red-700 px-4 py-3 rounded-xl">
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl animate-slide-up">
             {error}
           </div>
         )}
 
+        {/* Mensaje de éxito */}
         {mensaje && (
-          <div className="bg-green-100 text-green-700 px-4 py-3 rounded-xl">
+          <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-xl animate-slide-up">
             {mensaje}
           </div>
         )}
 
-        <div className="flex justify-end">
+        {/* Botón Generar */}
+        <div className="flex justify-end animate-slide-up" style={{ animationDelay: "0.3s" }}>
           <button
             onClick={handleGenerar}
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl shadow-md transition disabled:bg-blue-300"
+            className="bg-[#00ABE4] hover:bg-[#0095C5] text-white px-6 py-3 rounded-xl shadow-md transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed hover:shadow-lg"
           >
             {loading ? "Procesando..." : "Generar"}
           </button>

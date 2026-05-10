@@ -2,6 +2,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import StatusBadge from "./StatusBadge";
 import { listarPlacasPendientes } from "../services/vehicleQueryApi";
+import { motion as Motion } from "framer-motion";
 
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Pagination, Navigation } from "swiper/modules";
@@ -107,59 +108,68 @@ export default function PendingPlatesPanel({
   });
 
   return (
-    <section className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-6 space-y-5">
-      <div>
-        <h2 className="text-xl font-bold text-slate-800">
-          {esModuloDatosVehiculo
-            ? "Buscar placas listas para datos vehículo"
-            : "Buscar placas pendientes por fecha"}
-        </h2>
+    <section className="bg-white rounded-3xl border border-[#e2e8f0] shadow-sm p-4 md:p-6 space-y-5">
+      <Motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+      >
+        <div>
+          <h2 className="text-xl font-bold text-[#1e293b]">
+            {esModuloDatosVehiculo
+              ? "Buscar placas listas para datos vehículo"
+              : "Buscar placas pendientes por fecha"}
+          </h2>
 
-        <p className="text-sm text-slate-500 mt-1">
-          {esModuloDatosVehiculo
-            ? "El sistema traerá placas que ya existen en propietario, SOAT y tecnomecánica, pero que aún no tienen datos del vehículo guardados."
-            : "El sistema traerá máximo 100 placas pendientes por lote. Cuando finalice la consulta, podrás volver a cargar las siguientes pendientes del mismo rango."}
-        </p>
-      </div>
+          <p className="text-sm text-[#64748b] mt-1">
+            {esModuloDatosVehiculo
+              ? "El sistema traerá placas que ya existen en propietario, SOAT y tecnomecánica, pero que aún no tienen datos del vehículo guardados."
+              : "El sistema traerá máximo 100 placas pendientes por lote. Cuando finalice la consulta, podrás volver a cargar las siguientes pendientes del mismo rango."}
+          </p>
+        </div>
+      </Motion.div>
 
-      <div
+      <Motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, delay: 0.1 }}
         className={`grid grid-cols-1 ${
           esModuloDatosVehiculo ? "md:grid-cols-3" : "md:grid-cols-4"
         } gap-4`}
       >
         <div>
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-[#1e293b]">
             Fecha inicio
           </label>
           <input
             type="date"
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-2 w-full rounded-2xl border border-[#cbd5e1] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00ABE4] focus:border-[#00ABE4] transition-colors"
           />
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-slate-700">
+          <label className="text-sm font-semibold text-[#1e293b]">
             Fecha fin
           </label>
           <input
             type="date"
             value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
-            className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-2 w-full rounded-2xl border border-[#cbd5e1] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00ABE4] focus:border-[#00ABE4] transition-colors"
           />
         </div>
 
         {!esModuloDatosVehiculo && (
           <div>
-            <label className="text-sm font-semibold text-slate-700">
+            <label className="text-sm font-semibold text-[#1e293b]">
               Estado
             </label>
             <select
               value={estado}
               onChange={(e) => setEstado(e.target.value)}
-              className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="mt-2 w-full rounded-2xl border border-[#cbd5e1] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00ABE4] focus:border-[#00ABE4] bg-white transition-colors"
             >
               <option value="pendientes">Pendientes</option>
               <option value="consultadas">Consultadas</option>
@@ -172,21 +182,26 @@ export default function PendingPlatesPanel({
           <button
             onClick={buscarPlacas}
             disabled={loading}
-            className="w-full bg-slate-900 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-2xl px-5 py-3 font-semibold transition"
+            className="w-full bg-[#00ABE4] hover:bg-[#0095c7] disabled:bg-[#cbd5e1] text-white rounded-2xl px-5 py-3 font-semibold transition-colors"
           >
             {loading ? "Buscando..." : "Buscar lote"}
           </button>
         </div>
-      </div>
+      </Motion.div>
 
       {placas.length > 0 && (
         <>
-          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 bg-slate-50 rounded-2xl p-4">
+          <Motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.2 }}
+            className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 bg-[#F8FAFC] rounded-2xl p-4"
+          >
             <div>
-              <p className="text-sm font-semibold text-slate-700">
+              <p className="text-sm font-semibold text-[#1e293b]">
                 Lote actual: {placas.length} placa(s)
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#64748b]">
                 {seleccionadas.length} seleccionada(s). Límite máximo por consulta: {QUERY_LIMIT}.
               </p>
             </div>
@@ -194,54 +209,62 @@ export default function PendingPlatesPanel({
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={seleccionarTodas}
-                className="px-4 py-2 rounded-xl bg-white border text-sm hover:bg-slate-100"
+                className="px-4 py-2 rounded-xl bg-white border border-[#e2e8f0] text-[#1e293b] text-sm hover:bg-[#F8FAFC] transition-colors"
               >
                 Seleccionar lote
               </button>
 
               <button
                 onClick={limpiarSeleccion}
-                className="px-4 py-2 rounded-xl bg-white border text-sm hover:bg-slate-100"
+                className="px-4 py-2 rounded-xl bg-white border border-[#e2e8f0] text-[#1e293b] text-sm hover:bg-[#F8FAFC] transition-colors"
               >
                 Limpiar
               </button>
 
               <button
                 onClick={enviarAConsulta}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm hover:bg-blue-700"
+                className="px-4 py-2 rounded-xl bg-[#00ABE4] text-white text-sm hover:bg-[#0095c7] transition-colors"
               >
                 {esModuloDatosVehiculo
                   ? "Consultar datos vehículo"
                   : "Consultar lote seleccionado"}
               </button>
             </div>
-          </div>
+          </Motion.div>
 
-          <div className="rounded-3xl border border-slate-200 p-4 bg-white">
+          <Motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.3 }}
+            className="rounded-3xl border border-[#e2e8f0] p-4 bg-white"
+          >
             <Swiper
               modules={[Pagination, Navigation]}
-              pagination={{ type: "progressbar" }}
+              pagination={{ 
+                type: "progressbar",
+                clickable: true
+              }}
               navigation
               spaceBetween={16}
               slidesPerView={1}
-              className="pb-10"
+              className="pb-10 [&_.swiper-pagination-progressbar-fill]:bg-[#00ABE4]"
             >
               {paginas.map((grupo, pageIndex) => (
                 <SwiperSlide key={pageIndex}>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <h3 className="text-sm font-bold text-slate-700">
+                      <h3 className="text-sm font-bold text-[#1e293b]">
                         Página {pageIndex + 1} de {totalPaginas}
                       </h3>
 
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-[#64748b]">
                         {grupo.length} placa(s)
                       </span>
                     </div>
 
-                    <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                    <div className="overflow-x-auto rounded-2xl border border-[#e2e8f0]">
                       <table className="w-full text-sm">
-                        <thead className="bg-slate-50 text-slate-500">
+                        <thead className="bg-[#F8FAFC] text-[#64748b]">
                           <tr>
                             <th className="p-3 text-left">Seleccionar</th>
                             <th className="p-3 text-left">Placa</th>
@@ -270,17 +293,18 @@ export default function PendingPlatesPanel({
                             return (
                               <tr
                                 key={item.id_consul_placa}
-                                className="border-t hover:bg-slate-50"
+                                className="border-t border-[#e2e8f0] hover:bg-[#F8FAFC] transition-colors"
                               >
                                 <td className="p-3">
                                   <input
                                     type="checkbox"
                                     checked={seleccionadas.includes(item.placa)}
                                     onChange={() => toggleSeleccion(item.placa)}
+                                    className="w-4 h-4 rounded border-[#cbd5e1] text-[#00ABE4] focus:ring-[#00ABE4]"
                                   />
                                 </td>
 
-                                <td className="p-3 font-bold text-slate-800">
+                                <td className="p-3 font-bold text-[#1e293b]">
                                   {item.placa}
                                 </td>
 
@@ -302,13 +326,13 @@ export default function PendingPlatesPanel({
                                   </StatusBadge>
                                 </td>
 
-                                <td className="p-3 text-slate-500">
+                                <td className="p-3 text-[#64748b]">
                                   {fechaPrincipal
                                     ? new Date(fechaPrincipal).toLocaleString()
                                     : "N/D"}
                                 </td>
 
-                                <td className="p-3 text-slate-500">
+                                <td className="p-3 text-[#64748b]">
                                   {esModuloDatosVehiculo ? (
                                     <StatusBadge status="warning">
                                       Sin datos vehículo
@@ -329,7 +353,7 @@ export default function PendingPlatesPanel({
                 </SwiperSlide>
               ))}
             </Swiper>
-          </div>
+          </Motion.div>
         </>
       )}
     </section>

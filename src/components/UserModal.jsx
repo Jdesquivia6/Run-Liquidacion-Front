@@ -43,17 +43,22 @@ export default function UserModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-2xl p-6 space-y-5">
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div
+        className="bg-white rounded-3xl w-full max-w-2xl p-6 space-y-5 animate-modal-in"
+      >
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">
+          <h2 className="text-2xl font-bold" style={{ color: "#1e293b" }}>
             {initialData ? "Editar usuario" : "Nuevo usuario"}
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-semibold">
+            <label
+              className="text-sm font-semibold"
+              style={{ color: "#1e293b" }}
+            >
               Nombre
             </label>
 
@@ -65,12 +70,17 @@ export default function UserModal({
                   nombre: e.target.value
                 })
               }
-              className="mt-2 w-full border rounded-2xl px-4 py-3"
+              className="mt-2 w-full border rounded-2xl px-4 py-3 transition-all duration-200 focus:ring-2 focus:ring-[#00ABE4]/30 focus:border-[#00ABE4]"
+              style={{ borderColor: "#cbd5e1", color: "#1e293b" }}
+              placeholder="Ingresa el nombre"
             />
           </div>
 
           <div>
-            <label className="text-sm font-semibold">
+            <label
+              className="text-sm font-semibold"
+              style={{ color: "#1e293b" }}
+            >
               Correo
             </label>
 
@@ -82,13 +92,19 @@ export default function UserModal({
                   email: e.target.value
                 })
               }
-              className="mt-2 w-full border rounded-2xl px-4 py-3"
+              type="email"
+              className="mt-2 w-full border rounded-2xl px-4 py-3 transition-all duration-200 focus:ring-2 focus:ring-[#00ABE4]/30 focus:border-[#00ABE4]"
+              style={{ borderColor: "#cbd5e1", color: "#1e293b" }}
+              placeholder="correo@ejemplo.com"
             />
           </div>
 
           {!initialData && (
             <div>
-              <label className="text-sm font-semibold">
+              <label
+                className="text-sm font-semibold"
+                style={{ color: "#1e293b" }}
+              >
                 Contraseña
               </label>
 
@@ -101,13 +117,18 @@ export default function UserModal({
                     password: e.target.value
                   })
                 }
-                className="mt-2 w-full border rounded-2xl px-4 py-3"
+                className="mt-2 w-full border rounded-2xl px-4 py-3 transition-all duration-200 focus:ring-2 focus:ring-[#00ABE4]/30 focus:border-[#00ABE4]"
+                style={{ borderColor: "#cbd5e1", color: "#1e293b" }}
+                placeholder="••••••••"
               />
             </div>
           )}
 
           <div>
-            <label className="text-sm font-semibold">
+            <label
+              className="text-sm font-semibold"
+              style={{ color: "#1e293b" }}
+            >
               Rol
             </label>
 
@@ -119,7 +140,8 @@ export default function UserModal({
                   rol: e.target.value
                 })
               }
-              className="mt-2 w-full border rounded-2xl px-4 py-3"
+              className="mt-2 w-full border rounded-2xl px-4 py-3 transition-all duration-200 focus:ring-2 focus:ring-[#00ABE4]/30 focus:border-[#00ABE4]"
+              style={{ borderColor: "#cbd5e1", color: "#1e293b" }}
             >
               <option value="operario">
                 Operario
@@ -134,7 +156,7 @@ export default function UserModal({
 
         {form.rol === "operario" && (
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-3">
+            <p className="text-sm font-semibold mb-3" style={{ color: "#1e293b" }}>
               Módulos permitidos
             </p>
 
@@ -142,15 +164,17 @@ export default function UserModal({
               {modulosDisponibles.map((modulo) => (
                 <label
                   key={modulo.codigo}
-                  className="flex items-center gap-2 border rounded-2xl px-3 py-2"
+                  className="flex items-center gap-2 border rounded-2xl px-3 py-2 cursor-pointer transition-all duration-200 hover:bg-[#E9F1FA]"
+                  style={{ borderColor: "#cbd5e1" }}
                 >
                   <input
                     type="checkbox"
                     checked={form.modulos.includes(modulo.codigo)}
                     onChange={() => toggleModulo(modulo.codigo)}
+                    className="w-4 h-4 rounded border-gray-300 text-[#00ABE4] focus:ring-[#00ABE4]"
                   />
 
-                  <span className="text-sm">
+                  <span className="text-sm" style={{ color: "#64748b" }}>
                     {modulo.nombre}
                   </span>
                 </label>
@@ -159,17 +183,19 @@ export default function UserModal({
           </div>
         )}
 
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-3 pt-2">
           <button
             onClick={onClose}
-            className="px-5 py-3 rounded-2xl border"
+            className="px-5 py-3 rounded-2xl border font-medium transition-all duration-200 hover:bg-[#E9F1FA]"
+            style={{ borderColor: "#cbd5e1", color: "#64748b" }}
           >
             Cancelar
           </button>
 
           <button
             onClick={handleSubmit}
-            className="px-5 py-3 rounded-2xl bg-blue-600 text-white"
+            className="px-5 py-3 rounded-2xl text-white font-medium transition-all duration-200 hover:bg-[#0095C5]"
+            style={{ backgroundColor: "#00ABE4" }}
           >
             Guardar
           </button>

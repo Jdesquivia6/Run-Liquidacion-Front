@@ -44,18 +44,18 @@ export default function RuntSessionStatus({ compact = false }) {
 
   const statusStyle = !activa
     ? {
-        wrapper: "bg-red-50 text-red-700 border-red-200",
+        wrapper: "bg-[#dc2626]/10 text-[#dc2626] border-[#dc2626]/20",
         icon: AlertTriangle,
         label: "Sesión vencida"
       }
     : minutos <= 15
       ? {
-          wrapper: "bg-amber-50 text-amber-700 border-amber-200",
+          wrapper: "bg-[#d97706]/10 text-[#d97706] border-[#d97706]/20",
           icon: Clock3,
           label: "Tiempo bajo"
         }
       : {
-          wrapper: "bg-emerald-50 text-emerald-700 border-emerald-200",
+          wrapper: "bg-[#059669]/10 text-[#059669] border-[#059669]/20",
           icon: ShieldCheck,
           label: "Sesión activa"
         };
@@ -91,7 +91,7 @@ export default function RuntSessionStatus({ compact = false }) {
             onClick={registrarSesion}
             disabled={loading}
             title="Registrar nuevo inicio de sesión RUNT"
-            className="shrink-0 bg-white/80 hover:bg-white rounded-xl p-2 text-slate-800 disabled:opacity-60"
+            className="shrink-0 bg-white/80 hover:bg-[#E9F1FA] rounded-xl p-2 text-[#1e293b] disabled:opacity-60"
           >
             <RefreshCcw size={15} className={loading ? "animate-spin" : ""} />
           </button>
@@ -127,12 +127,12 @@ export default function RuntSessionStatus({ compact = false }) {
         <div className="w-full lg:w-80">
           <div className="flex justify-between text-xs mb-1">
             <span>Tiempo disponible</span>
-            <span>{minutos} min</span>
+            <span className="text-[#00ABE4] font-semibold">{minutos} min</span>
           </div>
 
           <div className="w-full h-2 bg-white/70 rounded-full overflow-hidden">
             <div
-              className="h-full bg-current rounded-full transition-all duration-500"
+              className="h-full bg-[#00ABE4] rounded-full transition-all duration-500"
               style={{ width: `${porcentaje}%` }}
             />
           </div>
@@ -141,7 +141,7 @@ export default function RuntSessionStatus({ compact = false }) {
         <button
           onClick={registrarSesion}
           disabled={loading}
-          className="bg-white/80 text-slate-800 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-white disabled:opacity-60 flex items-center justify-center gap-2"
+          className="bg-[#00ABE4] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#0095C5] disabled:opacity-60 flex items-center justify-center gap-2"
         >
           <RefreshCcw size={15} className={loading ? "animate-spin" : ""} />
           {loading ? "Registrando..." : "Registrar sesión"}

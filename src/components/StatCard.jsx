@@ -2,10 +2,10 @@ import { motion as Motion } from "framer-motion";
 
 export default function StatCard({ title, value, icon: Icon, color = "blue" }) {
   const styles = {
-    blue: "bg-blue-50 text-blue-700",
-    green: "bg-emerald-50 text-emerald-700",
-    red: "bg-red-50 text-red-700",
-    amber: "bg-amber-50 text-amber-700",
+    blue: "bg-[#00ABE4]/10 text-[#00ABE4]",
+    green: "bg-[#059669]/10 text-[#059669]",
+    red: "bg-[#dc2626]/10 text-[#dc2626]",
+    amber: "bg-[#d97706]/10 text-[#d97706]",
     slate: "bg-slate-50 text-slate-700"
   };
 
@@ -14,12 +14,13 @@ export default function StatCard({ title, value, icon: Icon, color = "blue" }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5"
+      whileHover={{ scale: 1.02 }}
+      className="bg-white rounded-3xl border border-[#e2e8f0] shadow-sm p-5 transition-transform cursor-default"
     >
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-slate-500">{title}</p>
-          <h3 className="text-3xl font-bold text-slate-900 mt-2">{value}</h3>
+          <p className="text-sm text-[#64748b]">{title}</p>
+          <h3 className="text-3xl font-bold text-[#1e293b] mt-2">{value}</h3>
         </div>
 
         {Icon && (

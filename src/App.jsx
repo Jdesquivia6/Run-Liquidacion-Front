@@ -7,6 +7,7 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
 
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import ConsultaPlaca from "./pages/ConsultaPlaca";
 import DatosVehiculo from "./pages/DatosVehiculo";
@@ -21,73 +22,89 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Landing page pública */}
+          <Route path="/" element={<Landing />} />
+          
+          {/* Login público */}
           <Route path="/login" element={<Login />} />
 
+          {/* Rutas públicas */}
+          <Route path="/recuperar-password" element={<RecuperarPassword />} />
+
+          {/* Dashboard con rutas anidadas */}
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <DashboardLayout />
               </ProtectedRoute>
             }
           >
-            <Route
-              index
-              element={
-                <ProtectedRoute module="dashboard">
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="consulta-placa"
-              element={
-                <ProtectedRoute module="consulta-placa">
-                  <ConsultaPlaca />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="datos-vehiculo"
-              element={
-                <ProtectedRoute module="datos-vehiculo">
-                  <DatosVehiculo />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="historial"
-              element={
-                <ProtectedRoute module="historial">
-                  <Historial />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="liquidacion"
-              element={
-                <ProtectedRoute module="liquidacion">
-                  <LiquidarRunt />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="usuarios"
-              element={
-                <ProtectedRoute module="configuracion">
-                  <Usuarios />
-                </ProtectedRoute>
-              }
-            />
+            <Route index element={<Dashboard />} />
+            <Route path="consulta-placa" element={<ConsultaPlaca />} />
+            <Route path="datos-vehiculo" element={<DatosVehiculo />} />
+            <Route path="historial" element={<Historial />} />
+            <Route path="liquidacion" element={<LiquidarRunt />} />
+            <Route path="usuarios" element={<Usuarios />} />
           </Route>
 
-          <Route path="/recuperar-password" element={<RecuperarPassword />} />
+          {/* Rutas directas para cada módulo (sin /dashboard/) */}
+          <Route
+            path="/consulta-placa"
+            element={
+              <ProtectedRoute module="consulta-placa">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ConsultaPlaca />} />
+          </Route>
 
+          <Route
+            path="/datos-vehiculo"
+            element={
+              <ProtectedRoute module="datos-vehiculo">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<DatosVehiculo />} />
+          </Route>
+
+          <Route
+            path="/historial"
+            element={
+              <ProtectedRoute module="historial">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Historial />} />
+          </Route>
+
+          <Route
+            path="/liquidacion"
+            element={
+              <ProtectedRoute module="liquidacion">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<LiquidarRunt />} />
+          </Route>
+
+          <Route
+            path="/usuarios"
+            element={
+              <ProtectedRoute module="configuracion">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Usuarios />} />
+          </Route>
+
+          {/* Cambiar password protegido */}
           <Route
             path="/cambiar-password"
             element={
@@ -97,6 +114,7 @@ function App() {
             }
           />
 
+          {/* Redirect desconocidos a landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 

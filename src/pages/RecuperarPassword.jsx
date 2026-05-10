@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { recuperarPasswordRequest } from "../services/authApi";
 
@@ -28,85 +29,221 @@ export default function RecuperarPassword() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#E9F1FA] via-blue-50 to-white">
 
-      {/* Fondo decorativo */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-blue-900/20 blur-3xl"></div>
-        <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full border border-blue-700/20"></div>
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-cyan-900/20 blur-3xl"></div>
-        <div className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full border border-cyan-700/20"></div>
-
-        <div className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-                             linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
+      {/* Partículas decorativas flotantes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute w-64 h-64 rounded-full bg-[#00ABE4]/5"
+          style={{ top: '10%', left: '5%' }}
+          animate={{
+            y: [0, -20, 0],
+            opacity: [0.3, 0.5, 0.3]
           }}
-        ></div>
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-48 h-48 rounded-full bg-[#00ABE4]/8"
+          style={{ top: '60%', right: '10%' }}
+          animate={{
+            y: [0, 15, 0],
+            opacity: [0.2, 0.4, 0.2]
+          }}
+          transition={{
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-32 h-32 rounded-full bg-[#00ABE4]/6"
+          style={{ bottom: '20%', left: '15%' }}
+          animate={{
+            y: [0, -10, 0],
+            opacity: [0.25, 0.45, 0.25]
+          }}
+          transition={{
+            duration: 7,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-20 h-20 rounded-full bg-[#00ABE4]/10"
+          style={{ top: '30%', right: '25%' }}
+          animate={{
+            y: [0, 12, 0],
+            opacity: [0.35, 0.55, 0.35]
+          }}
+          transition={{
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-40 h-40 rounded-full bg-[#00ABE4]/4"
+          style={{ bottom: '40%', right: '30%' }}
+          animate={{
+            y: [0, -18, 0],
+            opacity: [0.2, 0.35, 0.2]
+          }}
+          transition={{
+            duration: 9,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-3 h-3 rounded-full bg-[#00ABE4]/20"
+          style={{ top: '15%', left: '40%' }}
+          animate={{
+            y: [0, -25, 0],
+            opacity: [0.3, 0.6, 0.3]
+          }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-2 h-2 rounded-full bg-[#00ABE4]/30"
+          style={{ top: '45%', left: '20%' }}
+          animate={{
+            y: [0, 20, 0],
+            opacity: [0.4, 0.7, 0.4]
+          }}
+          transition={{
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-4 h-4 rounded-full bg-[#00ABE4]/15"
+          style={{ bottom: '30%', right: '15%' }}
+          animate={{
+            y: [0, -15, 0],
+            opacity: [0.25, 0.5, 0.25]
+          }}
+          transition={{
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
       </div>
 
       {/* Contenido principal */}
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6">
 
-        <div className="w-full max-w-md">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="w-full max-w-md bg-white rounded-3xl shadow-[0_8px_32px_rgba(0,171,228,0.15)] p-8 sm:p-10"
+        >
 
-          {/* Header */}
-          <div className="text-center mb-10">
-            {/* Icono de recuperación */}
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/30 mb-6">
-              <svg className="w-10 h-10 text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 9v.906a2.25 2.25 0 01-1.635 2.335l-2.221.741a2.25 2.25 0 00-1.762.736l-.335.111a2.25 2.25 0 00-.6 1v.905a2.25 2.25 0 01-1.635 2.335l-2.221.741a2.25 2.25 0 00-1.762.736l-.335.111a2.25 2.25 0 00-.6 1v.905c0 .63.23 1.22.635 1.659l2.22.741a2.25 2.25 0 001.762.736l.336.111a2.25 2.25 0 00.6-1v-.905a2.25 2.25 0 011.635-2.335l2.221-.74a2.25 2.25 0 001.762-.736l.335-.112a2.25 2.25 0 00.6 1v.906c0 .63-.23 1.22-.635 1.659l-2.22.741a2.25 2.25 0 00-1.762.736l-.336.111a2.25 2.25 0 00-.6-1v-.905a2.25 2.25 0 00-.6 1l-.336.111a2.25 2.25 0 00-1.762-.736l-2.22-.74A2.25 2.25 0 012.25 15.75V14.25a2.25 2.25 0 01.635-1.659l2.22-.741a2.25 2.25 0 001.762-.736l.336-.111a2.25 2.25 0 00.6 1v.905a2.25 2.25 0 00-.6 1l-.336.111a2.25 2.25 0 00-1.762.736l-2.22.741A2.25 2.25 0 012.25 18v-1.5" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v3.75m-6.75 0h9.75" />
-              </svg>
-            </div>
+          {emailEnviado ? (
+            /* Estado de éxito */
+            <div className="text-center space-y-6">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-green-100 to-green-200 border-2 border-green-400/30"
+              >
+                <svg className="w-10 h-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              </motion.div>
 
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
-              Recuperar Contraseña
-            </h1>
-            <p className="text-blue-300/80 text-sm">
-              Ingresa tu correo y te enviaremos una contraseña temporal para acceder al sistema.
-            </p>
-          </div>
+              <div>
+                <h2 className="text-2xl font-bold text-[#1e293b] mb-2">Correo enviado</h2>
+                <p className="text-[#64748b] text-sm">
+                  Si el correo existe en nuestros registros, recibirás una contraseña temporal en tu bandeja de entrada.
+                </p>
+              </div>
 
-          {/* Card principal */}
-          <div className="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-3xl p-8">
-
-            {emailEnviado ? (
-              /* Estado de éxito */
-              <div className="text-center space-y-6">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20 border border-green-500/30">
-                  <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              <div className="bg-[#00ABE4]/10 border border-[#00ABE4]/20 rounded-2xl p-4 text-left">
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 text-[#00ABE4] mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                   </svg>
-                </div>
-
-                <div>
-                  <h2 className="text-xl font-semibold text-white mb-2">Correo enviado</h2>
-                  <p className="text-blue-300/70 text-sm">
-                    Si el correo existe en nuestros registros, recibirás una contraseña temporal en tu bandeja de entrada.
-                  </p>
-                </div>
-
-                <div className="bg-blue-900/20 border border-blue-500/20 rounded-2xl p-4">
-                  <p className="text-blue-300/80 text-xs leading-relaxed">
+                  <p className="text-[#64748b] text-xs leading-relaxed">
                     Revisa también la carpeta de spam. La contraseña temporal tiene vigencia de 24 horas.
                   </p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setEmailEnviado(false)}
-                  className="w-full border border-white/20 text-blue-200 hover:bg-white/10 rounded-2xl py-3 font-medium transition-all duration-300"
-                >
-                  Enviar a otro correo
-                </button>
               </div>
-            ) : (
-              /* Formulario de recuperación */
+
+              <button
+                type="button"
+                onClick={() => setEmailEnviado(false)}
+                className="w-full border-2 border-gray-100 text-[#64748b] hover:bg-gray-50 hover:border-[#00ABE4]/30 hover:text-[#00ABE4] rounded-2xl py-3 font-medium transition-all duration-300"
+              >
+                Enviar a otro correo
+              </button>
+
+              {/* Botón para ir al login */}
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#00ABE4] to-[#0090c4] hover:from-[#00ABE4] hover:to-[#007ba3] text-white font-semibold rounded-2xl py-3 px-6 transition-all duration-300 shadow-md"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+                <span>Ir al inicio de sesión</span>
+              </Link>
+            </div>
+          ) : (
+            /* Formulario de recuperación */
+            <>
+              {/* Header */}
+              <div className="text-center mb-8">
+                {/* Icono de recuperación/email */}
+                <motion.div
+                  className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E9F1FA] to-[#00ABE4]/10 border-2 border-[#00ABE4]/20 mb-6"
+                  animate={{
+                    boxShadow: [
+                      "0 0 0 0 rgba(0, 171, 228, 0.2)",
+                      "0 0 0 8px rgba(0, 171, 228, 0)",
+                    ]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeOut"
+                  }}
+                >
+                  <motion.svg
+                    className="w-10 h-10 text-[#00ABE4]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    animate={{ scale: [1, 1.02, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5A2.25 2.25 0 002.25 6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                  </motion.svg>
+                </motion.div>
+
+                <h1 className="text-3xl sm:text-4xl font-bold text-[#1e293b] mb-2">
+                  Recuperar Contraseña
+                </h1>
+                <p className="text-[#64748b] text-sm">
+                  Ingresa tu correo y te enviaremos una contraseña temporal para acceder al sistema.
+                </p>
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400/60">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5A2.25 2.25 0 002.25 6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                     </svg>
@@ -117,14 +254,16 @@ export default function RecuperarPassword() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     placeholder="Correo electrónico registrado"
-                    className="w-full bg-white/[0.08] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-blue-200/40 focus:outline-none focus:border-blue-400/50 focus:bg-white/[0.12] transition-all duration-300"
+                    className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-[#1e293b] placeholder-[#64748b]/60 focus:outline-none focus:border-[#00ABE4] focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,171,228,0.15)] transition-all duration-300"
                   />
                 </div>
 
-                <button
+                <motion.button
                   type="submit"
                   disabled={loading}
-                  className="w-full relative overflow-hidden bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:from-blue-800 disabled:to-cyan-800 text-white font-semibold rounded-2xl py-4 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:scale-100 disabled:cursor-not-allowed shadow-lg shadow-blue-900/30"
+                  whileHover={{ scale: loading ? 1 : 1.02 }}
+                  whileTap={{ scale: loading ? 1 : 0.98 }}
+                  className="w-full relative overflow-hidden bg-gradient-to-r from-[#00ABE4] to-[#0090c4] hover:from-[#00ABE4] hover:to-[#007ba3] disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-2xl py-4 transition-all duration-300 shadow-lg shadow-[#00ABE4]/25 disabled:shadow-none disabled:cursor-not-allowed"
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2">
                     {loading ? (
@@ -144,32 +283,32 @@ export default function RecuperarPassword() {
                       </>
                     )}
                   </span>
-                </button>
+                </motion.button>
               </form>
-            )}
 
-            {/* Link volver */}
-            <div className="mt-6 text-center">
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-2 text-sm text-blue-300/70 hover:text-blue-200 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                </svg>
-                Volver al inicio de sesión
-              </Link>
-            </div>
-          </div>
+              {/* Link volver */}
+              <div className="mt-6 text-center">
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-2 text-sm text-[#00ABE4] hover:text-[#0090c4] font-medium transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                  </svg>
+                  Volver al inicio de sesión
+                </Link>
+              </div>
+            </>
+          )}
 
           {/* Footer */}
           <div className="mt-8 text-center">
-            <p className="text-blue-400/40 text-xs">
+            <p className="text-[#64748b]/60 text-xs">
               ¿No tienes acceso? Contacta al administrador del sistema
             </p>
           </div>
 
-        </div>
+        </motion.div>
       </div>
     </div>
   );

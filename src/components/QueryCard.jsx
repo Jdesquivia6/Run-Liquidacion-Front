@@ -11,17 +11,17 @@ export default function QueryCard({ item, onViewDetail }) {
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 hover:shadow-lg transition"
+      className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5 hover:shadow-lg transition"
     >
       <div className="flex justify-between items-start gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
+          <div className="w-12 h-12 rounded-2xl bg-[#E9F1FA] flex items-center justify-center text-[#00ABE4]">
             <Car size={22} />
           </div>
 
           <div>
-            <p className="text-xs text-slate-500">Placa</p>
-            <h3 className="text-2xl font-bold text-slate-900">{item.placa}</h3>
+            <p className="text-xs text-[#64748b]">Placa</p>
+            <h3 className="text-2xl font-bold text-[#1e293b]">{item.placa}</h3>
           </div>
         </div>
 
@@ -29,20 +29,20 @@ export default function QueryCard({ item, onViewDetail }) {
       </div>
 
       {item.error && (
-        <div className="mt-4 flex gap-2 text-sm text-red-700 bg-red-50 rounded-2xl p-3">
+        <div className="mt-4 flex gap-2 text-sm text-white bg-[#dc2626] rounded-2xl p-3">
           <AlertTriangle size={18} />
           <span>{item.error}</span>
         </div>
       )}
 
       {item.propietario && (
-        <div className="mt-4 bg-slate-50 rounded-2xl p-4 text-sm text-slate-600">
-          <div className="flex items-center gap-2 font-semibold text-slate-800 mb-2">
+        <div className="mt-4 bg-[#E9F1FA] rounded-2xl p-4 text-sm text-[#64748b]">
+          <div className="flex items-center gap-2 font-semibold text-[#1e293b] mb-2">
             <User size={17} />
             Propietario
           </div>
           <p>{item.propietario.nombre_completo || "No disponible"}</p>
-          <p className="text-slate-500">
+          <p className="text-[#64748b]">
             {item.propietario.tipo_documento} {item.propietario.numero_documento}
           </p>
         </div>
@@ -56,9 +56,9 @@ export default function QueryCard({ item, onViewDetail }) {
             ["Modelo", item.datos_vehiculo.modelo],
             ["Servicio", item.datos_vehiculo.servicio]
           ].map(([label, value]) => (
-            <div key={label} className="bg-slate-50 rounded-2xl p-3">
-              <p className="text-xs text-slate-400">{label}</p>
-              <p className="font-semibold text-slate-800">{value || "N/D"}</p>
+            <div key={label} className="bg-[#E9F1FA] rounded-2xl p-3">
+              <p className="text-xs text-[#64748b]">{label}</p>
+              <p className="font-semibold text-[#1e293b]">{value || "N/D"}</p>
             </div>
           ))}
         </div>
@@ -66,7 +66,7 @@ export default function QueryCard({ item, onViewDetail }) {
 
       <button
         onClick={() => onViewDetail(item)}
-        className="mt-5 w-full bg-slate-900 hover:bg-blue-700 text-white rounded-2xl py-3 text-sm transition flex items-center justify-center gap-2"
+        className="mt-5 w-full bg-[#00ABE4] hover:bg-[#0095C5] text-white rounded-2xl py-3 text-sm transition flex items-center justify-center gap-2"
       >
         <Eye size={17} />
         Ver detalle

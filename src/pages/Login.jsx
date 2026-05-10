@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { loginRequest } from "../services/authApi";
 import { useAuth } from "../auth/AuthContext";
 import toast from "react-hot-toast";
@@ -34,7 +35,7 @@ export default function Login() {
       if (resp.user?.debe_cambiar_password === true) {
         navigate("/cambiar-password", { replace: true });
       } else {
-        navigate("/", { replace: true });
+        navigate("/dashboard", { replace: true });
       }
     } catch (error) {
       toast.error(error.response?.data?.error || "Error iniciando sesión");
@@ -44,54 +45,162 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#E9F1FA] via-blue-50 to-white">
 
-      {/* Fondo decorativo institucional */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Circulo decorativo superior derecho */}
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-blue-900/20 blur-3xl"></div>
-        <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full border border-blue-700/20"></div>
-        <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full border border-blue-600/10"></div>
-
-        {/* Circulo decorativo inferior izquierdo */}
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-cyan-900/20 blur-3xl"></div>
-        <div className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full border border-cyan-700/20"></div>
-
-        {/* Líneas de grid sutiles */}
-        <div className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-                             linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
+      {/* Partículas decorativas flotantes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute w-64 h-64 rounded-full bg-[#00ABE4]/5"
+          style={{ top: '10%', left: '5%' }}
+          animate={{
+            y: [0, -20, 0],
+            opacity: [0.3, 0.5, 0.3]
           }}
-        ></div>
-
-        {/* Logo/watermark decorativo */}
-        <div className="absolute bottom-8 right-8 opacity-5">
-          <svg width="200" height="200" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-          </svg>
-        </div>
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-48 h-48 rounded-full bg-[#00ABE4]/8"
+          style={{ top: '60%', right: '10%' }}
+          animate={{
+            y: [0, 15, 0],
+            opacity: [0.2, 0.4, 0.2]
+          }}
+          transition={{
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-32 h-32 rounded-full bg-[#00ABE4]/6"
+          style={{ bottom: '20%', left: '15%' }}
+          animate={{
+            y: [0, -10, 0],
+            opacity: [0.25, 0.45, 0.25]
+          }}
+          transition={{
+            duration: 7,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-20 h-20 rounded-full bg-[#00ABE4]/10"
+          style={{ top: '30%', right: '25%' }}
+          animate={{
+            y: [0, 12, 0],
+            opacity: [0.35, 0.55, 0.35]
+          }}
+          transition={{
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-40 h-40 rounded-full bg-[#00ABE4]/4"
+          style={{ bottom: '40%', right: '30%' }}
+          animate={{
+            y: [0, -18, 0],
+            opacity: [0.2, 0.35, 0.2]
+          }}
+          transition={{
+            duration: 9,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        {/* Círculos decorativos más pequeños */}
+        <motion.div
+          className="absolute w-3 h-3 rounded-full bg-[#00ABE4]/20"
+          style={{ top: '15%', left: '40%' }}
+          animate={{
+            y: [0, -25, 0],
+            opacity: [0.3, 0.6, 0.3]
+          }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-2 h-2 rounded-full bg-[#00ABE4]/30"
+          style={{ top: '45%', left: '20%' }}
+          animate={{
+            y: [0, 20, 0],
+            opacity: [0.4, 0.7, 0.4]
+          }}
+          transition={{
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute w-4 h-4 rounded-full bg-[#00ABE4]/15"
+          style={{ bottom: '30%', right: '15%' }}
+          animate={{
+            y: [0, -15, 0],
+            opacity: [0.25, 0.5, 0.25]
+          }}
+          transition={{
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
       </div>
 
       {/* Contenido principal */}
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6">
 
-        <div className="w-full max-w-md">
+        {/* Tarjeta de login */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="w-full max-w-md bg-white rounded-3xl shadow-[0_8px_32px_rgba(0,171,228,0.15)] p-8 sm:p-10 shadow-card-hover"
+        >
 
           {/* Header con branding */}
-          <div className="text-center mb-10">
-            {/* Icono institucional */}
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/30 mb-6">
-              <svg className="w-10 h-10 text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <div className="text-center mb-8">
+            {/* Icono institucional con animación de pulso */}
+            <motion.div
+              className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E9F1FA] to-[#00ABE4]/10 border-2 border-[#00ABE4]/20 mb-6"
+              animate={{
+                boxShadow: [
+                  "0 0 0 0 rgba(0, 171, 228, 0.2)",
+                  "0 0 0 8px rgba(0, 171, 228, 0)",
+                ]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeOut"
+              }}
+            >
+              <motion.svg
+                className="w-10 h-10 text-[#00ABE4]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                animate={{ scale: [1, 1.02, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
-              </svg>
-            </div>
+              </motion.svg>
+            </motion.div>
 
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
-              Sistema RUNT
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">
+              AutoCore
             </h1>
-            <p className="text-blue-300/80 text-sm sm:text-base">
+            <p className="text-[#00ABE4] text-sm sm:text-base font-medium">
               Liquidación y Consultas Vehiculares
             </p>
           </div>
@@ -101,7 +210,7 @@ export default function Login() {
 
             {/* Campo Email */}
             <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400/60">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5A2.25 2.25 0 002.25 6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                 </svg>
@@ -113,13 +222,13 @@ export default function Login() {
                 onChange={handleChange}
                 required
                 placeholder="Correo electrónico"
-                className="w-full bg-white/[0.08] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-blue-200/40 focus:outline-none focus:border-blue-400/50 focus:bg-white/[0.12] transition-all duration-300"
+                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-gray-700 placeholder-gray-400 focus:outline-none focus:border-[#00ABE4] focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,171,228,0.15)] transition-all duration-300"
               />
             </div>
 
             {/* Campo Contraseña */}
             <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400/60">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                 </svg>
@@ -131,12 +240,12 @@ export default function Login() {
                 onChange={handleChange}
                 required
                 placeholder="Contraseña"
-                className="w-full bg-white/[0.08] border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white placeholder-blue-200/40 focus:outline-none focus:border-blue-400/50 focus:bg-white/[0.12] transition-all duration-300"
+                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-12 text-gray-700 placeholder-gray-400 focus:outline-none focus:border-[#00ABE4] focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,171,228,0.15)] transition-all duration-300"
               />
               <button
                 type="button"
                 onClick={() => setVerPassword(!verPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-400/60 hover:text-blue-300 transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60 hover:text-[#00ABE4] transition-colors"
               >
                 {verPassword ? (
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -155,17 +264,19 @@ export default function Login() {
             <div className="text-right -mt-1">
               <Link
                 to="/recuperar-password"
-                className="text-sm text-blue-300/70 hover:text-blue-200 transition-colors"
+                className="text-sm text-[#00ABE4] hover:text-[#0090c4] font-medium transition-colors"
               >
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>
 
             {/* Botón submit */}
-            <button
+            <motion.button
               type="submit"
               disabled={loading}
-              className="w-full relative overflow-hidden bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:from-blue-800 disabled:to-cyan-800 text-white font-semibold rounded-2xl py-4 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:scale-100 disabled:cursor-not-allowed shadow-lg shadow-blue-900/30"
+              whileHover={{ scale: loading ? 1 : 1.02 }}
+              whileTap={{ scale: loading ? 1 : 0.98 }}
+              className="w-full relative overflow-hidden bg-gradient-to-r from-[#00ABE4] to-[#0090c4] hover:from-[#00ABE4] hover:to-[#007ba3] disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-2xl py-4 transition-all duration-300 shadow-lg shadow-[#00ABE4]/25 disabled:shadow-none disabled:cursor-not-allowed"
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
                 {loading ? (
@@ -185,20 +296,20 @@ export default function Login() {
                   </>
                 )}
               </span>
-            </button>
+            </motion.button>
           </form>
 
           {/* Footer informativo */}
           <div className="mt-10 text-center">
-            <p className="text-blue-400/40 text-xs">
+            <p className="text-gray-400 text-xs">
               Portal de consultas y liquidación de trámites
             </p>
-            <p className="text-blue-500/30 text-xs mt-1">
+            <p className="text-[#00ABE4]/50 text-xs mt-1 font-medium">
               RUNT — Registro Único Nacional de Tránsito
             </p>
           </div>
 
-        </div>
+        </motion.div>
       </div>
     </div>
   );

@@ -35,7 +35,8 @@ export function AuthProvider({ children }) {
 
     setUser(null);
 
-    window.location.href = "/login";
+    // Redirigir al Landing
+    window.location.href = "/";
   };
 
   const hasModule = (module) => {

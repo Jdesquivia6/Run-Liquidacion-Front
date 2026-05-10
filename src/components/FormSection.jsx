@@ -9,7 +9,7 @@ export default function SelectField({
 }) {
   return (
     <div className={className}>
-      <label className="text-sm text-gray-600 font-medium block">
+      <label className="text-sm text-[#1e293b] font-medium block mb-1">
         {label}
       </label>
 
@@ -19,16 +19,21 @@ export default function SelectField({
         onChange={onChange}
         disabled={disabled}
         className="
-          w-full mt-1
-          border border-gray-300
+          w-full
+          border border-[#cbd5e1]
           rounded-xl
-          px-4 py-2
-          focus:outline-none
-          focus:ring-2
-          focus:ring-blue-500
-          transition
+          px-4 py-2.5
+          text-[#1e293b]
           bg-white
-          disabled:bg-gray-100
+          focus:outline-none
+          focus:border-[#00ABE4]
+          focus:ring-2
+          focus:ring-[#00ABE4]/30
+          transition-all
+          duration-200
+          disabled:bg-[#E9F1FA]
+          disabled:cursor-not-allowed
+          cursor-pointer
         "
       >
         <option value="">Seleccione...</option>

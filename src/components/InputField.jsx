@@ -7,11 +7,12 @@ export default function InputField({
   className = "",
   readOnly = false,
   disabled = false,
-  placeholder = ""
+  placeholder = "",
+  error = false
 }) {
   return (
     <div className={className}>
-      <label className="text-sm text-gray-600 font-medium block">
+      <label className="text-sm text-[#1e293b] font-medium block mb-1">
         {label}
       </label>
 
@@ -23,18 +24,24 @@ export default function InputField({
         readOnly={readOnly}
         disabled={disabled}
         placeholder={placeholder}
-        className="
-          w-full mt-1
-          border border-gray-300
+        className={`
+          w-full
+          border border-[#cbd5e1]
           rounded-xl
-          px-4 py-2
+          px-4 py-2.5
+          text-[#1e293b]
+          placeholder:text-[#64748b]
           focus:outline-none
+          focus:border-[#00ABE4]
           focus:ring-2
-          focus:ring-blue-500
-          transition
-          disabled:bg-gray-100
-          read-only:bg-gray-50
-        "
+          focus:ring-[#00ABE4]/30
+          transition-all
+          duration-200
+          disabled:bg-[#E9F1FA]
+          disabled:cursor-not-allowed
+          read-only:bg-[#E9F1FA]
+          ${error ? "border-[#dc2626] focus:border-[#dc2626] focus:ring-[#dc2626]/30" : ""}
+        `}
       />
     </div>
   );

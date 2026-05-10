@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
+  --text: #475569;
+  --text-h: #1e293b;
+  --bg: #E9F1FA;
+  --border: #cbd5e1;
+  --code-bg: #f1f5f9;
+  --accent: #00ABE4;
+  --accent-bg: rgba(0, 171, 228, 0.1);
+  --accent-border: rgba(0, 171, 228, 0.4);
 
   font-size: 16px;
-  line-height: 1.45;
-  letter-spacing: 0.18px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
 
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
@@ -41,7 +41,7 @@ body,
 /* BODY */
 
 body {
-  background: #f1f5f9;
+  background: #E9F1FA;
   overflow-x: hidden;
   margin: 0;
   font-family: inherit;
@@ -57,30 +57,112 @@ body {
   box-sizing: border-box;
 }
 
+/* SWIPER STYLES */
 
 .swiper-pagination-progressbar {
-  background: #e2e8f0 !important;
-  height: 4px !important;
+  background: #E9F1FA !important;
+  height: 6px !important;
   border-radius: 999px;
   overflow: hidden;
 }
 
 .swiper-pagination-progressbar-fill {
-  background: #2563eb !important;
+  background: #00ABE4 !important;
 }
 
 .swiper-button-next,
 .swiper-button-prev {
-  color: #0f172a !important;
+  color: #00ABE4 !important;
   background: white;
-  width: 38px !important;
-  height: 38px !important;
+  width: 44px !important;
+  height: 44px !important;
   border-radius: 999px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 171, 228, 0.2);
+  transition: all 0.3s ease;
+}
+
+.swiper-button-next:hover,
+.swiper-button-prev:hover {
+  background: #00ABE4;
+  color: white !important;
+  transform: scale(1.1);
 }
 
 .swiper-button-next::after,
 .swiper-button-prev::after {
-  font-size: 14px !important;
+  font-size: 16px !important;
   font-weight: bold;
+}
+
+/* INPUT FOCUS STYLES */
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #00ABE4 !important;
+  box-shadow: 0 0 0 3px rgba(0, 171, 228, 0.15) !important;
+}
+
+/* BUTTON TRANSITIONS */
+
+button {
+  transition: all 0.2s ease;
+}
+
+/* SCROLLBAR PERSONALIZADO */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #E9F1FA;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00ABE4;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0095C5;
+}
+
+/* Animaciones fade-in */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.5s ease-out forwards;
+}
+
+/* Transición suave para filas de tabla */
+tbody tr {
+  animation: fade-in 0.3s ease-out both;
 }
