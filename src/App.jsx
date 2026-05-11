@@ -11,6 +11,7 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import ConsultaPlaca from "./pages/ConsultaPlaca";
 import DatosVehiculo from "./pages/DatosVehiculo";
+import PersonasDirecciones from "./pages/PersonasDirecciones";
 import Historial from "./pages/Historial";
 import LiquidarRunt from "./pages/LiquidarRunt";
 import Usuarios from "./pages/Usuarios";
@@ -43,6 +44,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="consulta-placa" element={<ConsultaPlaca />} />
             <Route path="datos-vehiculo" element={<DatosVehiculo />} />
+            <Route path="personas-direcciones" element={<PersonasDirecciones />} />
             <Route path="historial" element={<Historial />} />
             <Route path="liquidacion" element={<LiquidarRunt />} />
             <Route path="usuarios" element={<Usuarios />} />
@@ -69,6 +71,17 @@ function App() {
             }
           >
             <Route index element={<DatosVehiculo />} />
+          </Route>
+
+          <Route
+            path="/personas-direcciones"
+            element={
+              <ProtectedRoute module="personas-direcciones">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<PersonasDirecciones />} />
           </Route>
 
           <Route

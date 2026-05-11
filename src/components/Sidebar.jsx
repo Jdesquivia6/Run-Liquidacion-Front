@@ -4,7 +4,9 @@ import {
   Car,
   ClipboardList,
   ReceiptText,
-  Settings
+  Settings,
+  MapPin,
+  Users
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { motion } from "framer-motion";
@@ -13,6 +15,7 @@ const menu = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
   { id: "consulta-placa", label: "Consulta de placa", icon: Search, module: "consulta-placa" },
   { id: "datos-vehiculo", label: "Datos vehículo", icon: Car, module: "datos-vehiculo" },
+  { id: "personas-direcciones", label: "Personas - Direcciones", icon: MapPin, module: "personas-direcciones" },
   { id: "historial", label: "Historial", icon: ClipboardList, module: "historial" },
   { id: "liquidacion", label: "Liquidaciones RUNT", icon: ReceiptText, module: "liquidacion" },
   { id: "configuracion", label: "Configuración", icon: Settings, module: "configuracion" }

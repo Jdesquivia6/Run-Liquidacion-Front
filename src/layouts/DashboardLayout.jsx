@@ -20,6 +20,7 @@ export default function DashboardLayout() {
     }
     if (path.includes("consulta-placa")) return "consulta-placa";
     if (path.includes("datos-vehiculo")) return "datos-vehiculo";
+    if (path.includes("personas-direcciones")) return "personas-direcciones";
     if (path.includes("historial")) return "historial";
     if (path.includes("liquidacion")) return "liquidacion";
     if (path.includes("usuarios")) return "configuracion";
@@ -31,6 +32,7 @@ export default function DashboardLayout() {
       dashboard: "/dashboard",
       "consulta-placa": "/consulta-placa",
       "datos-vehiculo": "/datos-vehiculo",
+      "personas-direcciones": "/personas-direcciones",
       historial: "/historial",
       liquidacion: "/liquidacion",
       configuracion: "/usuarios"
