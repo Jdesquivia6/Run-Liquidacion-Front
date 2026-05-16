@@ -1,19 +1,24 @@
 import { useEffect, useState } from "react";
 import { consultarDatosVehiculoBatch, listarHistorialVehiculos } from "../services/vehicleQueryApi";
+import { crearJob } from "../services/workerJobsApi";
 import PendingPlatesPanel from "../components/PendingPlatesPanel";
 import DetailModal from "../components/DetailModal";
 import QueryHistoryTable from "../components/QueryHistoryTable";
 import toast from "react-hot-toast";
 import QueryResultsSwiper from "../components/QueryResultsSwiper";
+import JobProgress from "../components/JobProgress";
+import { Search, Loader2, Briefcase } from "lucide-react";
 
 export default function DatosVehiculo() {
   const [placas, setPlacas] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingJob, setLoadingJob] = useState(false);
   const [resultados, setResultados] = useState([]);
   const [historial, setHistorial] = useState([]);
   const [error, setError] = useState("");
   const [detalle, setDetalle] = useState(null);
   const [refrescarPendientesActual, setRefrescarPendientesActual] = useState(null);
+  const [jobActual, setJobActual] = useState(null);
 
   const exitosas = resultados.filter((r) => r.ok).length;
   const fallidas = resultados.filter((r) => !r.ok).length;
@@ -96,6 +101,33 @@ export default function DatosVehiculo() {
       setError(err.response?.data?.error || err.message || "Error en la consulta");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCrearTrabajo = async () => {
+    const placasArray = procesarPlacas();
+
+    if (placasArray.length === 0) {
+      toast.error("Debe ingresar al menos una placa");
+      return;
+    }
+
+    try {
+      setLoadingJob(true);
+      
+      const items = placasArray.map(placa => ({ placa }));
+      
+      const resp = await crearJob("datos-vehiculo", items);
+      
+      if (resp.job?.id_job) {
+        setJobActual(resp.job.id_job);
+        toast.success(`Trabajo creado con ${items.length} placa(s)`);
+        setPlacas("");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error al crear trabajo");
+    } finally {
+      setLoadingJob(false);
     }
   };
 
@@ -270,6 +302,29 @@ export default function DatosVehiculo() {
               </>
             )}
           </button>
+
+          <button
+            onClick={handleCrearTrabajo}
+            disabled={loadingJob}
+            className="
+              flex-1 px-6 py-3 rounded-2xl font-semibold flex items-center justify-center gap-2
+              bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700
+              text-white shadow-lg transition-all duration-200
+              disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed
+            "
+          >
+            {loadingJob ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Creando...</span>
+              </>
+            ) : (
+              <>
+                <Briefcase className="w-5 h-5" />
+                <span>Crear trabajo</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Error */}
@@ -309,6 +364,20 @@ export default function DatosVehiculo() {
               <div className="h-3 rounded animate-pulse" style={{ backgroundColor: "#d1fae5", width: "40%" }}></div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Progreso del trabajo */}
+      {jobActual && (
+        <div style={{ animation: "fadeInUp 0.4s ease-out" }}>
+          <JobProgress 
+            jobId={jobActual} 
+            onClose={() => {
+              setJobActual(null);
+              cargarHistorial();
+            }}
+            onComplete={cargarHistorial}
+          />
         </div>
       )}
 

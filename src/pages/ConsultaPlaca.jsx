@@ -4,13 +4,15 @@ import {
   consultarPlacaBatch,
   listarHistorialVehiculos
 } from "../services/vehicleQueryApi";
+import { crearJob } from "../services/workerJobsApi";
 import { obtenerEstadoSesionRunt } from "../services/sessionRunt"
 import PendingPlatesPanel from "../components/PendingPlatesPanel";
 import DetailModal from "../components/DetailModal";
 import QueryHistoryTable from "../components/QueryHistoryTable";
 import toast from "react-hot-toast";
 import QueryResultsSwiper from "../components/QueryResultsSwiper";
-import { Search, AlertCircle, Loader2 } from "lucide-react";
+import JobProgress from "../components/JobProgress";
+import { Search, AlertCircle, Loader2, Play, Briefcase } from "lucide-react";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -37,11 +39,13 @@ const itemVariants = {
 export default function ConsultaPlaca() {
   const [placas, setPlacas] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingJob, setLoadingJob] = useState(false);
   const [resultados, setResultados] = useState([]);
   const [historial, setHistorial] = useState([]);
   const [error, setError] = useState("");
   const [detalle, setDetalle] = useState(null);
   const [refrescarPendientesActual, setRefrescarPendientesActual] = useState(null);
+  const [jobActual, setJobActual] = useState(null);
 
   const procesarPlacas = () => {
     return placas
@@ -91,6 +95,11 @@ export default function ConsultaPlaca() {
   useEffect(() => {
     cargarHistorial();
   }, []);
+
+  // Función para recargar historial
+  const recargarHistorial = () => {
+    cargarHistorial();
+  };
 
   const handleConsultar = async () => {
     try {
@@ -150,6 +159,33 @@ export default function ConsultaPlaca() {
       setError(err.response?.data?.error || err.message || "Error en la consulta");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCrearTrabajo = async () => {
+    const placasArray = procesarPlacas();
+
+    if (placasArray.length === 0) {
+      toast.error("Debe ingresar al menos una placa");
+      return;
+    }
+
+    try {
+      setLoadingJob(true);
+      
+      const items = placasArray.map(placa => ({ placa }));
+      
+      const resp = await crearJob("consulta-placa", items);
+      
+      if (resp.job?.id_job) {
+        setJobActual(resp.job.id_job);
+        toast.success(`Trabajo creado con ${items.length} placa(s)`);
+        setPlacas("");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error al crear trabajo");
+    } finally {
+      setLoadingJob(false);
     }
   };
 
@@ -270,6 +306,32 @@ export default function ConsultaPlaca() {
                 </>
               )}
             </motion.button>
+
+            <motion.button
+              onClick={handleCrearTrabajo}
+              disabled={loadingJob}
+              whileHover={{ scale: loadingJob ? 1 : 1.03 }}
+              whileTap={{ scale: loadingJob ? 1 : 0.98 }}
+              className="
+                w-full xl:w-52 h-12
+                bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700
+                disabled:from-slate-300 disabled:to-slate-300
+                text-white px-6 py-3 rounded-2xl shadow-lg shadow-emerald-500/30
+                transition-all duration-200 font-semibold flex items-center justify-center gap-2
+              "
+            >
+              {loadingJob ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Creando...</span>
+                </>
+              ) : (
+                <>
+                  <Briefcase className="w-5 h-5" />
+                  <span>Crear trabajo</span>
+                </>
+              )}
+            </motion.button>
           </div>
 
           {error && (
@@ -319,6 +381,22 @@ export default function ConsultaPlaca() {
               </motion.div>
             ))}
           </motion.div>
+        )}
+
+        {jobActual && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <JobProgress 
+              jobId={jobActual} 
+              onClose={() => {
+                setJobActual(null);
+                recargarHistorial(); // Recargar historial al cerrar
+              }}
+              onComplete={recargarHistorial} // Recargar al terminar
+            />
+          </motion.section>
         )}
 
         <motion.div variants={itemVariants}>

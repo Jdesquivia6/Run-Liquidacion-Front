@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { MapPin, Users, Search, Loader2, CheckCircle, XCircle, AlertCircle, RefreshCw, Upload } from "lucide-react";
+import { MapPin, Users, Search, Loader2, CheckCircle, XCircle, AlertCircle, RefreshCw, Upload, Briefcase } from "lucide-react";
 import toast from "react-hot-toast";
+import { crearJob } from "../services/workerJobsApi";
+import JobProgress from "../components/JobProgress";
 
 const COLORS = {
   pageBg: "#E9F1FA",
@@ -26,10 +28,12 @@ export default function PersonasDirecciones() {
   const [documentos, setDocumentos] = useState("");
   const [tipoDocumentoManual, setTipoDocumentoManual] = useState("C.C. Cédula Ciudadanía");
   const [loading, setLoading] = useState(false);
+  const [loadingJob, setLoadingJob] = useState(false);
   const [modoAuto, setModoAuto] = useState(false); // Modo carrera: consulta y avanza solo
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState("");
   const [tipoGrupoCargado, setTipoGrupoCargado] = useState(null);
+  const [jobActual, setJobActual] = useState(null);
   
   // Personas pendientes desde el backend
   const [personasPendientes, setPersonasPendientes] = useState([]);
@@ -207,6 +211,34 @@ export default function PersonasDirecciones() {
       return () => clearTimeout(timer);
     }
   }, [loading, modoAuto, documentosArray.length, resultado]);
+
+  const handleCrearTrabajo = async () => {
+    if (documentosArray.length === 0) {
+      toast.error("Debe cargar documentos primero");
+      return;
+    }
+
+    try {
+      setLoadingJob(true);
+      
+      const items = documentosArray.map(doc => ({
+        tipoDocumento: tipoDocumentoManual,
+        numeroDocumento: doc.trim()
+      }));
+      
+      const resp = await crearJob("personas-direcciones", items);
+      
+      if (resp.job?.id_job) {
+        setJobActual(resp.job.id_job);
+        toast.success(`Trabajo creado con ${items.length} documento(s)`);
+        setDocumentos("");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error al crear trabajo");
+    } finally {
+      setLoadingJob(false);
+    }
+  };
 
   const handleLimpiar = () => {
     setDocumentos("");
@@ -515,6 +547,25 @@ export default function PersonasDirecciones() {
             {!modoAuto ? (
               <>
                 <button
+                  onClick={handleCrearTrabajo}
+                  disabled={loadingJob || documentosArray.length === 0}
+                  className="flex items-center gap-2 h-12 px-6 rounded-2xl font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+                  style={{ backgroundColor: loadingJob ? COLORS.textSecondary : "#10b981" }}
+                >
+                  {loadingJob ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Creando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Briefcase size={18} />
+                      <span>Crear trabajo</span>
+                    </>
+                  )}
+                </button>
+
+                <button
                   onClick={handleConsultarUnGrupo}
                   disabled={loading || documentosArray.length === 0}
                   className="flex items-center gap-2 h-12 px-6 rounded-2xl font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
@@ -725,6 +776,20 @@ export default function PersonasDirecciones() {
             </section>
           </>
         )}
+
+      {/* Progreso del trabajo */}
+      {jobActual && (
+        <div style={{ animation: "fadeInUp 0.4s ease-out" }}>
+          <JobProgress 
+            jobId={jobActual} 
+            onClose={() => {
+              setJobActual(null);
+              cargarPersonasPendientes();
+            }}
+            onComplete={cargarPersonasPendientes}
+          />
+        </div>
+      )}
       </div>
     </div>
   );

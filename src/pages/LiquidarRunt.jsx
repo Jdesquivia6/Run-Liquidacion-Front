@@ -4,6 +4,10 @@ import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
 import TramitesTable from "../components/TramitesTable";
 import { consultarLiquidacion } from "../services/liquidacionApi";
+import { crearJob } from "../services/workerJobsApi";
+import JobProgress from "../components/JobProgress";
+import { Loader2, Briefcase } from "lucide-react";
+import toast from "react-hot-toast";
 
 const registrosOptions = [
   { value: "RNA", label: "RNA" },
@@ -58,6 +62,8 @@ export default function LiquidarRunt() {
 
   const [tramitesAgregados, setTramitesAgregados] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingJob, setLoadingJob] = useState(false);
+  const [jobActual, setJobActual] = useState(null);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
@@ -140,6 +146,38 @@ export default function LiquidarRunt() {
       setError(err.response?.data?.error || err.message || "Error de conexión");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCrearTrabajo = async () => {
+    if (!form.registro || !form.tramite) {
+      toast.error("Debe seleccionar registro y trámite");
+      return;
+    }
+
+    try {
+      setLoadingJob(true);
+      
+      const items = [{
+        registro: form.registro,
+        placa: form.placa || null,
+        tipoDocumento: form.tipoDocumento || null,
+        numeroDocumento: form.numeroDocumento || null,
+        tramite: form.tramite,
+        clasificacion: form.clasificacion || null,
+        tarifa: form.tarifa || null
+      }];
+      
+      const resp = await crearJob("liquidaciones", items);
+      
+      if (resp.job?.id_job) {
+        setJobActual(resp.job.id_job);
+        toast.success("Trabajo creado");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error al crear trabajo");
+    } finally {
+      setLoadingJob(false);
     }
   };
 
@@ -300,7 +338,16 @@ export default function LiquidarRunt() {
         )}
 
         {/* Botón Generar */}
-        <div className="flex justify-end animate-slide-up" style={{ animationDelay: "0.3s" }}>
+        <div className="flex justify-end gap-3 animate-slide-up" style={{ animationDelay: "0.3s" }}>
+          <button
+            onClick={handleCrearTrabajo}
+            disabled={loadingJob}
+            className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-md transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed hover:shadow-lg flex items-center gap-2"
+          >
+            {loadingJob ? <Loader2 className="w-5 h-5 animate-spin" /> : <Briefcase className="w-5 h-5" />}
+            Crear trabajo
+          </button>
+          
           <button
             onClick={handleGenerar}
             disabled={loading}
@@ -309,6 +356,19 @@ export default function LiquidarRunt() {
             {loading ? "Procesando..." : "Generar"}
           </button>
         </div>
+
+        {/* Progreso del trabajo */}
+        {jobActual && (
+          <div className="animate-slide-up">
+            <JobProgress 
+              jobId={jobActual} 
+              onClose={() => {
+                setJobActual(null);
+              }}
+              onComplete={() => {}}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
