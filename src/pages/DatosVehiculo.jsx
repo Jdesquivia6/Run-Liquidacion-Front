@@ -46,8 +46,7 @@ export default function DatosVehiculo() {
           servicio: item.servicio,
           color: item.color,
           modelo: item.modelo
-        },
-        data: item.data
+        }
       }));
 
       setHistorial(data);

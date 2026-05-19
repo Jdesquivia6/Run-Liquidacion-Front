@@ -67,8 +67,7 @@ export default function ConsultaPlaca() {
           tipo_documento: item.tipo_identificacion_propietario,
           numero_documento: item.numero_identificacion_propietario,
           nombre_completo: item.nombre_razon_social_propietario
-        },
-        data: item.data
+        }
       }));
 
       setHistorial(data);
