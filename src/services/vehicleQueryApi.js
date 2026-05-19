@@ -1,6 +1,7 @@
 import axios from "axios";
+import axiosClient from "./axiosClient";
 
-const API_BASE = "http://localhost:3000/api";
+const API_BASE = "http://84.247.165.214:3000/api";
 
 export async function consultarPlacaBatch(placas) {
   const response = await axios.post(`${API_BASE}/vehiculos/procesar-batch`, {
@@ -60,16 +61,23 @@ export async function obtenerDashboard({ fechaInicio, fechaFin } = {}) {
   return response.data;
 }
 
-export function exportarDashboardExcel({ fechaInicio, fechaFin } = {}) {
-  const params = new URLSearchParams();
+export async function exportarDashboardExcel({ fechaInicio, fechaFin } = {}) {
+  try {
+    const response = await axiosClient.get('/dashboard/exportar-excel', {
+      params: { fechaInicio, fechaFin },
+      responseType: 'blob'
+    });
 
-  if (fechaInicio && fechaFin) {
-    params.append("fechaInicio", fechaInicio);
-    params.append("fechaFin", fechaFin);
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `dashboard_${new Date().toISOString().split('T')[0]}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error exportando Excel:', error);
+    throw error;
   }
-
-  window.open(
-    `${API_BASE}/dashboard/exportar-excel?${params.toString()}`,
-    "_blank"
-  );
 }

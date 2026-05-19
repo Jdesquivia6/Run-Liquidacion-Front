@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = "http://localhost:3000/api/users";
+const API_BASE = "http://84.247.165.214:3000/api/users";
 
 function getToken() {
   return localStorage.getItem("token");
