@@ -14,6 +14,13 @@ import "swiper/css/navigation";
 const PAGE_SIZE = 20;
 const QUERY_LIMIT = 100;
 
+function formatFechaColombia(fecha) {
+  if (!fecha) return "N/D";
+  const parsed = new Date(fecha);
+  if (Number.isNaN(parsed.getTime())) return "N/D";
+  return parsed.toLocaleString("es-CO", { timeZone: "America/Bogota" });
+}
+
 export default function PendingPlatesPanel({
   modulo = "consulta-placa",
   onSendToQuery,
@@ -327,9 +334,7 @@ export default function PendingPlatesPanel({
                                 </td>
 
                                 <td className="p-3 text-[#64748b]">
-                                  {fechaPrincipal
-                                    ? new Date(fechaPrincipal).toLocaleString()
-                                    : "N/D"}
+                                  {formatFechaColombia(fechaPrincipal)}
                                 </td>
 
                                 <td className="p-3 text-[#64748b]">
@@ -338,7 +343,7 @@ export default function PendingPlatesPanel({
                                       Sin datos vehículo
                                     </StatusBadge>
                                   ) : consultada && item.fecha_consulta ? (
-                                    new Date(item.fecha_consulta).toLocaleString()
+                                    formatFechaColombia(item.fecha_consulta)
                                   ) : (
                                     "Sin consultar"
                                   )}

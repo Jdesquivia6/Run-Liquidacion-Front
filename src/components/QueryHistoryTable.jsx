@@ -1,5 +1,12 @@
 import StatusBadge from "./StatusBadge";
 
+function formatFechaColombia(fecha) {
+  if (!fecha) return "—";
+  const parsed = new Date(fecha);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString("es-CO", { timeZone: "America/Bogota" });
+}
+
 export default function QueryHistoryTable({ data = [], onViewDetail }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -36,7 +43,7 @@ export default function QueryHistoryTable({ data = [], onViewDetail }) {
                     </StatusBadge>
                   </td>
                   <td className="text-[#64748b]">{item.message || item.error || "Sin detalle"}</td>
-                  <td className="text-[#64748b]">{item.fecha || new Date().toLocaleString()}</td>
+                  <td className="text-[#64748b]">{formatFechaColombia(item.fecha)}</td>
                   <td>
                     <button
                       onClick={() => onViewDetail(item)}

@@ -27,6 +27,17 @@ const ITEM_ESTADO_COLORS = {
   sesion_vencida: "text-orange-600"
 };
 
+function formatFechaColombia(fecha) {
+  if (!fecha) return "—";
+
+  const parsed = new Date(fecha);
+  if (Number.isNaN(parsed.getTime())) return "—";
+
+  return parsed.toLocaleString("es-CO", {
+    timeZone: "America/Bogota"
+  });
+}
+
 export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = true, refreshInterval = 5000 }) {
   const [job, setJob] = useState(null);
   const [items, setItems] = useState([]);
@@ -129,9 +140,9 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
             </span>
           </div>
           <p className="text-sm text-[#64748b] mt-1">
-            Creado: {new Date(job?.created_at).toLocaleString()}
-            {job?.started_at && ` | Iniciado: ${new Date(job.started_at).toLocaleString()}`}
-            {job?.finished_at && ` | Finalizado: ${new Date(job.finished_at).toLocaleString()}`}
+            Creado: {formatFechaColombia(job?.created_at)}
+            {job?.started_at && ` | Iniciado: ${formatFechaColombia(job.started_at)}`}
+            {job?.finished_at && ` | Finalizado: ${formatFechaColombia(job.finished_at)}`}
           </p>
         </div>
 

@@ -43,6 +43,13 @@ const MODULOS = [
 
 const ITEMS_POR_PAGINA = 10;
 
+function formatFechaColombia(fecha) {
+  if (!fecha) return "—";
+  const parsed = new Date(fecha);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString("es-CO", { timeZone: "America/Bogota" });
+}
+
 export default function Historial() {
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -294,7 +301,7 @@ export default function Historial() {
                       <tbody>
                         <tr className="border-t" style={{ borderColor: COLORS.border }}>
                           <td className="py-3 px-4" style={{ color: COLORS.textSecondary }}>
-                            {item.fecha ? new Date(item.fecha).toLocaleString("es-CO") : "—"}
+                            {formatFechaColombia(item.fecha)}
                           </td>
                           <td className="py-3 px-4 font-mono font-bold" style={{ color: COLORS.textPrimary }}>
                             {item.placa || item.numero_documento || "—"}
