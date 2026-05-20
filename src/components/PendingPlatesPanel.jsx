@@ -21,12 +21,17 @@ function formatFechaColombia(fecha) {
   return parsed.toLocaleString("es-CO", { timeZone: "America/Bogota" });
 }
 
+// Obtener fecha actual en Colombia (para默认值 del datepicker)
+function getTodayColombia() {
+  return new Date().toLocaleDateString("es-CO", { timeZone: "America/Bogota" }).split('/').reverse().join('-');
+}
+
 export default function PendingPlatesPanel({
   modulo = "consulta-placa",
   onSendToQuery,
   onAfterBatchCompleted
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayColombia();
 
   const [fechaInicio, setFechaInicio] = useState(today);
   const [fechaFin, setFechaFin] = useState(today);

@@ -39,16 +39,19 @@ const COLORS = {
   border: "#e2e8f0"
 };
 
+// Helper para obtener fecha en Colombia
+function getFechaColombia(daysAtras = 0) {
+  const fecha = new Date();
+  fecha.setDate(fecha.getDate() - daysAtras);
+  return fecha.toLocaleDateString("es-CO", { timeZone: "America/Bogota" }).split('/').reverse().join('-');
+}
+
 export default function Dashboard() {
-  // Helper para calcular fechas
-  const getFecha30DiasAtras = () => {
-    const fecha = new Date();
-    fecha.setDate(fecha.getDate() - 30);
-    return fecha.toISOString().slice(0, 10);
-  };
+  // Helper para calcular fechas (en hora Colombia)
+  const getFecha30DiasAtras = () => getFechaColombia(30);
 
   const [fechaInicio, setFechaInicio] = useState(getFecha30DiasAtras());
-  const [fechaFin, setFechaFin] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaFin, setFechaFin] = useState(getFechaColombia(0));
   const [modoFiltrado, setModoFiltrado] = useState(false); //false = Modo Global (resumen sin filtro + carruseles filtrados)
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -71,7 +74,7 @@ export default function Dashboard() {
       // Cargar datos del período seleccionado
       const paramsFiltrado = {
         fechaInicio: modoFiltrado ? fechaInicio : getFecha30DiasAtras(),
-        fechaFin: modoFiltrado ? fechaFin : new Date().toISOString().slice(0, 10)
+        fechaFin: modoFiltrado ? fechaFin : getFechaColombia(0)
       };
       const respFiltrado = await obtenerDashboard(paramsFiltrado);
 
@@ -97,7 +100,7 @@ export default function Dashboard() {
       // Siempre exportar del período seleccionado ( filtrado o 30 días por defecto)
       const params = {
         fechaInicio: modoFiltrado ? fechaInicio : getFecha30DiasAtras(),
-        fechaFin: modoFiltrado ? fechaFin : new Date().toISOString().slice(0, 10)
+        fechaFin: modoFiltrado ? fechaFin : getFechaColombia(0)
       };
 
       await exportarDashboardExcel(params);
@@ -127,7 +130,7 @@ export default function Dashboard() {
         const params = {
           // Modo Filtrado = fechas elegidas, Modo Global = últimos 30 días
           fechaInicio: modoFiltrado ? fechaInicio : getFecha30DiasAtras(),
-          fechaFin: modoFiltrado ? fechaFin : new Date().toISOString().slice(0, 10)
+          fechaFin: modoFiltrado ? fechaFin : getFechaColombia(0)
         };
         const resp = await obtenerDashboard(params);
         setDashboard(prev => ({

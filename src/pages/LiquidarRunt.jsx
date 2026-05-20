@@ -43,10 +43,15 @@ const tarifasMock = [
   { value: "TARIFA_2", label: "Tarifa 2" }
 ];
 
+// Obtener fecha actual en Colombia
+function getFechaColombia() {
+  return new Date().toLocaleDateString("es-CO", { timeZone: "America/Bogota" }).split('/').reverse().join('-');
+}
+
 export default function LiquidarRunt() {
   const [form, setForm] = useState({
     organismoTransito: "SECRETARÍA DE TRÁNSITO DE SABANAGRANDE",
-    fechaLiquidacion: new Date().toISOString().slice(0, 10),
+    fechaLiquidacion: getFechaColombia(),
     tipoDocumentoSolicitante: "NIT",
     numeroDocumentoSolicitante: "901769233",
     nombreSolicitante: "",
