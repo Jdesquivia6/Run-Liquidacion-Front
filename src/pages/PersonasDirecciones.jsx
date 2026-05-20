@@ -3,6 +3,11 @@ import { MapPin, Users, Search, Loader2, CheckCircle, XCircle, AlertCircle, Refr
 import toast from "react-hot-toast";
 import { crearJob } from "../services/workerJobsApi";
 import JobProgress from "../components/JobProgress";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Pagination, Navigation } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/pagination";
+import "swiper/css/navigation";
 
 const COLORS = {
   pageBg: "#E9F1FA",
@@ -29,11 +34,13 @@ export default function PersonasDirecciones() {
   const [tipoDocumentoManual, setTipoDocumentoManual] = useState("C.C. Cédula Ciudadanía");
   const [loading, setLoading] = useState(false);
   const [loadingJob, setLoadingJob] = useState(false);
-  const [modoAuto, setModoAuto] = useState(false); // Modo carrera: consulta y avanza solo
+  const [modoJobsCarrera, setModoJobsCarrera] = useState(false);
+  const [colaJobs, setColaJobs] = useState([]);
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState("");
   const [tipoGrupoCargado, setTipoGrupoCargado] = useState(null);
   const [jobActual, setJobActual] = useState(null);
+  const [historialDirecciones, setHistorialDirecciones] = useState([]);
   
   // Personas pendientes desde el backend
   const [personasPendientes, setPersonasPendientes] = useState([]);
@@ -77,12 +84,29 @@ export default function PersonasDirecciones() {
       }
       
       toast.success(`${data.total} pendiente(s). Se cargó el primer tipo para no mezclar documentos.`);
+      return data;
 
     } catch (err) {
       toast.error(err.message);
       setError(err.message);
+      return null;
     } finally {
       setCargandoPendientes(false);
+    }
+  };
+
+  const cargarHistorialDirecciones = async () => {
+    try {
+      const response = await fetch("http://84.247.165.214:3000/api/personas/direcciones/historial-direcciones?limit=100");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Error cargando historial de direcciones");
+      }
+
+      setHistorialDirecciones(data.results || []);
+    } catch (err) {
+      console.error("Error cargando historial direcciones:", err.message);
     }
   };
 
@@ -185,32 +209,25 @@ export default function PersonasDirecciones() {
     }
   };
 
-  // Modo carrera: consulta automáticamente sin presionar botón
-  const iniciarModoCarrera = () => {
-    if (documentosArray.length === 0) {
-      toast.error("Carga documentos primero");
-      return;
-    }
-    setModoAuto(true);
-    handleConsultarUnGrupo();
-  };
+  const crearTrabajoConDocumentos = async (tipoDocumento, docs) => {
+    const items = docs.map((doc) => ({
+      tipoDocumento,
+      numeroDocumento: String(doc || "").trim()
+    })).filter((item) => item.numeroDocumento);
 
-  const detenerModoCarrera = () => {
-    setModoAuto(false);
-  };
-
-  // Detener modo carrera cuando termina de cargar
-  useEffect(() => {
-    if (!loading && modoAuto && documentosArray.length > 0 && resultado) {
-      // Ya se cargó el siguiente grupo, continuar
-      const timer = setTimeout(() => {
-        if (!loading) {
-          handleConsultarUnGrupo();
-        }
-      }, 1500);
-      return () => clearTimeout(timer);
+    if (!items.length) {
+      throw new Error("No hay documentos válidos para crear el trabajo");
     }
-  }, [loading, modoAuto, documentosArray.length, resultado]);
+
+    const resp = await crearJob("personas-direcciones", items);
+
+    if (!resp.job?.id_job) {
+      throw new Error("No se recibió id de trabajo");
+    }
+
+    setJobActual(resp.job.id_job);
+    toast.success(`Trabajo creado: ${tipoDocumento} (${items.length})`);
+  };
 
   const handleCrearTrabajo = async () => {
     if (documentosArray.length === 0) {
@@ -220,19 +237,28 @@ export default function PersonasDirecciones() {
 
     try {
       setLoadingJob(true);
-      
-      const items = documentosArray.map(doc => ({
-        tipoDocumento: tipoDocumentoManual,
-        numeroDocumento: doc.trim()
-      }));
-      
-      const resp = await crearJob("personas-direcciones", items);
-      
-      if (resp.job?.id_job) {
-        setJobActual(resp.job.id_job);
-        toast.success(`Trabajo creado con ${items.length} documento(s)`);
-        setDocumentos("");
+
+      if (tipoGrupoCargado && gruposPendientes.length > 0) {
+        const idxActual = gruposPendientes.findIndex(
+          (g) => g.tipoDocumento === tipoGrupoCargado
+        );
+
+        const cola = idxActual >= 0
+          ? gruposPendientes
+              .slice(idxActual + 1)
+              .filter((g) => (g.documentos || []).length > 0)
+              .map((g) => ({ tipoDocumento: g.tipoDocumento, documentos: g.documentos || [] }))
+          : [];
+
+        setModoJobsCarrera(true);
+        setColaJobs(cola);
+      } else {
+        setModoJobsCarrera(false);
+        setColaJobs([]);
       }
+
+      await crearTrabajoConDocumentos(tipoDocumentoManual, documentosArray);
+      setDocumentos("");
     } catch (err) {
       toast.error(err.response?.data?.error || "Error al crear trabajo");
     } finally {
@@ -244,10 +270,16 @@ export default function PersonasDirecciones() {
     setDocumentos("");
     setResultado(null);
     setError("");
+    setModoJobsCarrera(false);
+    setColaJobs([]);
     setPersonasPendientes([]);
     setGruposPendientes([]);
     setTipoGrupoCargado(null);
   };
+
+  useEffect(() => {
+    cargarHistorialDirecciones();
+  }, []);
 
   const grupos = gruposPendientes.map((grupo) => ({
     ...grupo,
@@ -262,6 +294,13 @@ export default function PersonasDirecciones() {
   const personasPaginaDetalle = grupoActivo
     ? grupoActivo.personas.slice((paginaDetalle - 1) * ITEMS_POR_PAGINA, paginaDetalle * ITEMS_POR_PAGINA)
     : [];
+
+  const HIST_ITEMS_PER_SLIDE = 10;
+  const historialSlides = [];
+
+  for (let i = 0; i < historialDirecciones.length; i += HIST_ITEMS_PER_SLIDE) {
+    historialSlides.push(historialDirecciones.slice(i, i + HIST_ITEMS_PER_SLIDE));
+  }
 
   return (
     <div className="min-h-screen p-4 md:p-6 lg:p-8" style={{ backgroundColor: COLORS.pageBg }}>
@@ -473,7 +512,7 @@ export default function PersonasDirecciones() {
           {!mostrarPendientes && (
             <div className="mb-6 flex items-center gap-4">
               <button
-                onClick={cargarPersonasPendientes}
+                onClick={() => cargarPersonasPendientes(limitPendientes)}
                 disabled={cargandoPendientes}
                 className="flex items-center gap-2 px-5 py-3 rounded-2xl font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
                 style={{ backgroundColor: COLORS.warning }}
@@ -544,73 +583,43 @@ export default function PersonasDirecciones() {
 
           {/* Botones */}
           <div className="flex flex-wrap gap-3 mt-6">
-            {!modoAuto ? (
-              <>
-                <button
-                  onClick={handleCrearTrabajo}
-                  disabled={loadingJob || documentosArray.length === 0}
-                  className="flex items-center gap-2 h-12 px-6 rounded-2xl font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
-                  style={{ backgroundColor: loadingJob ? COLORS.textSecondary : "#10b981" }}
-                >
-                  {loadingJob ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      <span>Creando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Briefcase size={18} />
-                      <span>Crear trabajo</span>
-                    </>
-                  )}
-                </button>
+            <button
+              onClick={handleCrearTrabajo}
+              disabled={loadingJob || documentosArray.length === 0}
+              className="flex items-center gap-2 h-12 px-6 rounded-2xl font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+              style={{ backgroundColor: loadingJob ? COLORS.textSecondary : "#10b981" }}
+            >
+              {loadingJob ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>Creando...</span>
+                </>
+              ) : (
+                <>
+                  <Briefcase size={18} />
+                  <span>Crear trabajo</span>
+                </>
+              )}
+            </button>
 
-                <button
-                  onClick={handleConsultarUnGrupo}
-                  disabled={loading || documentosArray.length === 0}
-                  className="flex items-center gap-2 h-12 px-6 rounded-2xl font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
-                  style={{ backgroundColor: loading ? COLORS.textSecondary : COLORS.primary }}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      <span>Consultando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Search size={18} />
-                      <span>Consultar ({documentosArray.length})</span>
-                    </>
-                  )}
-                </button>
-
-                {tipoGrupoCargado && (
-                  <button
-                    onClick={iniciarModoCarrera}
-                    disabled={loading}
-                    className="flex items-center gap-2 h-12 px-6 rounded-2xl font-semibold text-white transition-all hover:shadow-lg"
-                    style={{ backgroundColor: COLORS.warning }}
-                  >
-                    <Loader2 size={18} />
-                    <span>Modo Carrera</span>
-                  </button>
-                )}
-              </>
-            ) : (
-              <button
-                onClick={detenerModoCarrera}
-                disabled={loading}
-                className="flex items-center gap-2 h-12 px-6 rounded-2xl font-semibold border-2 transition-all hover:shadow-lg"
-                style={{ 
-                  borderColor: COLORS.error, 
-                  color: COLORS.error,
-                  backgroundColor: "transparent"
-                }}
-              >
-                <XCircle size={18} />
-                <span>Detener Carrera</span>
-              </button>
-            )}
+            <button
+              onClick={handleConsultarUnGrupo}
+              disabled={loading || documentosArray.length === 0}
+              className="flex items-center gap-2 h-12 px-6 rounded-2xl font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+              style={{ backgroundColor: loading ? COLORS.textSecondary : COLORS.primary }}
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>Consultando...</span>
+                </>
+              ) : (
+                <>
+                  <Search size={18} />
+                  <span>Consultar ({documentosArray.length})</span>
+                </>
+              )}
+            </button>
 
             <button
               onClick={handleLimpiar}
@@ -777,6 +786,89 @@ export default function PersonasDirecciones() {
           </>
         )}
 
+        {/* Historial direcciones */}
+        <section
+          className="rounded-3xl p-6 shadow-sm"
+          style={{
+            backgroundColor: COLORS.cardBg,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)"
+          }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
+              Historial direcciones
+            </h3>
+
+            <button
+              onClick={cargarHistorialDirecciones}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm"
+              style={{ borderColor: COLORS.border, color: COLORS.textSecondary }}
+            >
+              <RefreshCw size={14} />
+              Recargar
+            </button>
+          </div>
+
+          {historialDirecciones.length === 0 ? (
+            <p className="text-sm" style={{ color: COLORS.textSecondary }}>
+              No hay historial de direcciones todavía.
+            </p>
+          ) : (
+            <Swiper
+              modules={[Pagination, Navigation]}
+              pagination={{ clickable: true }}
+              navigation
+              spaceBetween={20}
+              slidesPerView={1}
+              className="pb-10"
+            >
+              {historialSlides.map((slideItems, slideIndex) => (
+                <SwiperSlide key={`hist-slide-${slideIndex}`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ backgroundColor: COLORS.pageBg }}>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Tipo Doc</th>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Documento</th>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Nombres / Apellidos</th>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Celular / Correo</th>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Dirección</th>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Municipio</th>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Teléfono</th>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Tipo Dir</th>
+                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Fecha consulta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {slideItems.map((item, index) => (
+                          <tr key={`${item.numero_documento}-${slideIndex}-${index}`} className="border-t" style={{ borderColor: COLORS.border }}>
+                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.tipo_documento || "—"}</td>
+                            <td className="py-3 px-3 font-mono font-semibold" style={{ color: COLORS.textPrimary }}>{item.numero_documento || "—"}</td>
+                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{`${item.nombres || ""} ${item.apellidos || ""}`.trim() || "—"}</td>
+                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>
+                              <div>{item.celular || "—"}</div>
+                              <div className="text-xs">{item.correo || "—"}</div>
+                            </td>
+                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.direccion || "—"}</td>
+                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.municio_departamento || "—"}</td>
+                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.telefono || "—"}</td>
+                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.tipo_direccion || "—"}</td>
+                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>
+                              {item.fecha_consulta_direccion
+                                ? new Date(item.fecha_consulta_direccion).toLocaleString("es-CO", { timeZone: "America/Bogota" })
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </SwiperSlide>
+              ))}
+            </Swiper>
+          )}
+        </section>
+
       {/* Progreso del trabajo */}
       {jobActual && (
         <div style={{ animation: "fadeInUp 0.4s ease-out" }}>
@@ -785,8 +877,39 @@ export default function PersonasDirecciones() {
             onClose={() => {
               setJobActual(null);
               cargarPersonasPendientes();
+              cargarHistorialDirecciones();
             }}
-            onComplete={cargarPersonasPendientes}
+            onComplete={async () => {
+              await cargarPersonasPendientes(limitPendientes);
+              await cargarHistorialDirecciones();
+
+              if (modoJobsCarrera && colaJobs.length > 0) {
+                const [siguiente, ...resto] = colaJobs;
+                setColaJobs(resto);
+                setTipoDocumentoManual(siguiente.tipoDocumento || tipoDocumentoManual);
+                setTipoGrupoCargado(siguiente.tipoDocumento || null);
+                setDocumentos((siguiente.documentos || []).join("\n"));
+
+                try {
+                  await crearTrabajoConDocumentos(siguiente.tipoDocumento, siguiente.documentos || []);
+                  setDocumentos("");
+                } catch (err) {
+                  setModoJobsCarrera(false);
+                  setColaJobs([]);
+                  toast.error(err.response?.data?.error || err.message || "Error creando siguiente trabajo");
+                }
+
+                return;
+              }
+
+              if (modoJobsCarrera) {
+                setModoJobsCarrera(false);
+                setColaJobs([]);
+                setDocumentos("");
+                setTipoGrupoCargado(null);
+                toast.success("✅ Proceso por jobs finalizado");
+              }
+            }}
           />
         </div>
       )}

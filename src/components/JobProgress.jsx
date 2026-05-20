@@ -63,6 +63,7 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
   };
 
   useEffect(() => {
+    setOnCompleteCalled(false);
     cargarDatos();
   }, [jobId]);
 
