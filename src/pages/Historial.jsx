@@ -54,10 +54,10 @@ export default function Historial() {
     try {
       setLoading(true);
       
-      let url = "http://localhost:3000/api/historial-vehiculos";
+      let url = "http://84.247.165.214:3000/api/historial-vehiculos";
       
       if (moduloActivo !== "todos") {
-        url = `http://localhost:3000/api/historial-vehiculos?modulo=${moduloActivo}`;
+        url = `http://84.247.165.214:3000/api/historial-vehiculos?modulo=${moduloActivo}`;
       }
 
       const response = await fetch(url);

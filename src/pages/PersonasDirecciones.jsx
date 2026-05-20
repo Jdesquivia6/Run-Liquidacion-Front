@@ -50,7 +50,7 @@ export default function PersonasDirecciones() {
     try {
       setCargandoPendientes(true);
       
-      const response = await fetch(`http://localhost:3000/api/personas/direcciones/personas-pendientes-direcciones?limit=${limit}`);
+      const response = await fetch(`http://84.247.165.214:3000/api/personas/direcciones/personas-pendientes-direcciones?limit=${limit}`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -133,7 +133,7 @@ export default function PersonasDirecciones() {
       setError("");
       setResultado(null);
 
-      const response = await fetch("http://localhost:3000/api/personas/direcciones/consultar-direcciones-pn-batch", {
+      const response = await fetch("http://84.247.165.214:3000/api/personas/direcciones/consultar-direcciones-pn-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
