@@ -786,6 +786,51 @@ export default function PersonasDirecciones() {
           </>
         )}
 
+        {/* Progreso del trabajo */}
+        {jobActual && (
+          <div style={{ animation: "fadeInUp 0.4s ease-out" }}>
+            <JobProgress 
+              jobId={jobActual} 
+              onClose={() => {
+                setJobActual(null);
+                cargarPersonasPendientes();
+                cargarHistorialDirecciones();
+              }}
+              onComplete={async () => {
+                await cargarPersonasPendientes(limitPendientes);
+                await cargarHistorialDirecciones();
+
+                if (modoJobsCarrera && colaJobs.length > 0) {
+                  const [siguiente, ...resto] = colaJobs;
+                  setColaJobs(resto);
+                  setTipoDocumentoManual(siguiente.tipoDocumento || tipoDocumentoManual);
+                  setTipoGrupoCargado(siguiente.tipoDocumento || null);
+                  setDocumentos((siguiente.documentos || []).join("\n"));
+
+                  try {
+                    await crearTrabajoConDocumentos(siguiente.tipoDocumento, siguiente.documentos || []);
+                    setDocumentos("");
+                  } catch (err) {
+                    setModoJobsCarrera(false);
+                    setColaJobs([]);
+                    toast.error(err.response?.data?.error || err.message || "Error creando siguiente trabajo");
+                  }
+
+                  return;
+                }
+
+                if (modoJobsCarrera) {
+                  setModoJobsCarrera(false);
+                  setColaJobs([]);
+                  setDocumentos("");
+                  setTipoGrupoCargado(null);
+                  toast.success("✅ Proceso por jobs finalizado");
+                }
+              }}
+            />
+          </div>
+        )}
+
         {/* Historial direcciones */}
         <section
           className="rounded-3xl p-6 shadow-sm"
@@ -869,50 +914,6 @@ export default function PersonasDirecciones() {
           )}
         </section>
 
-      {/* Progreso del trabajo */}
-      {jobActual && (
-        <div style={{ animation: "fadeInUp 0.4s ease-out" }}>
-          <JobProgress 
-            jobId={jobActual} 
-            onClose={() => {
-              setJobActual(null);
-              cargarPersonasPendientes();
-              cargarHistorialDirecciones();
-            }}
-            onComplete={async () => {
-              await cargarPersonasPendientes(limitPendientes);
-              await cargarHistorialDirecciones();
-
-              if (modoJobsCarrera && colaJobs.length > 0) {
-                const [siguiente, ...resto] = colaJobs;
-                setColaJobs(resto);
-                setTipoDocumentoManual(siguiente.tipoDocumento || tipoDocumentoManual);
-                setTipoGrupoCargado(siguiente.tipoDocumento || null);
-                setDocumentos((siguiente.documentos || []).join("\n"));
-
-                try {
-                  await crearTrabajoConDocumentos(siguiente.tipoDocumento, siguiente.documentos || []);
-                  setDocumentos("");
-                } catch (err) {
-                  setModoJobsCarrera(false);
-                  setColaJobs([]);
-                  toast.error(err.response?.data?.error || err.message || "Error creando siguiente trabajo");
-                }
-
-                return;
-              }
-
-              if (modoJobsCarrera) {
-                setModoJobsCarrera(false);
-                setColaJobs([]);
-                setDocumentos("");
-                setTipoGrupoCargado(null);
-                toast.success("✅ Proceso por jobs finalizado");
-              }
-            }}
-          />
-        </div>
-      )}
       </div>
     </div>
   );
