@@ -308,7 +308,7 @@ export default function LiquidarRunt() {
     }
   };
 
-  // ── Crear trabajo (worker) — un item por trámite ──
+  // ── Crear trabajo (worker) — UN solo item con TODOS los trámites ──
   const handleCrearTrabajo = async () => {
     if (tramitesList.length === 0) {
       toast.error("Agregue al menos un trámite");
@@ -322,12 +322,15 @@ export default function LiquidarRunt() {
     try {
       setLoadingJob(true);
 
-      const items = tramitesList.map(t => ({
+      // Un solo item con el array de tramites → una sola liquidación
+      const items = [{
         registro: "RNA",
         placa: form.placa,
-        tramite: t.tramite,
-        clasificacion: t.clasificacion
-      }));
+        tramites: tramitesList.map(t => ({
+          tramite: t.tramite,
+          clasificacion: t.clasificacion
+        }))
+      }];
 
       const resp = await crearJob("liquidaciones", items);
 
