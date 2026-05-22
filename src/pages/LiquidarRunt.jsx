@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Header from "../components/Header";
 import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
-import { consultarLiquidacion } from "../services/liquidacionApi";
+import { consultarLiquidacion, API_BASE } from "../services/liquidacionApi";
 import { crearJob } from "../services/workerJobsApi";
 import JobProgress from "../components/JobProgress";
-import { Loader2, Briefcase, FileText, CheckCircle2, AlertCircle, Download } from "lucide-react";
+import { Loader2, Briefcase, FileText, CheckCircle2, AlertCircle, Download, Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 // ─────────────────────────────────────────────
@@ -65,7 +65,7 @@ function LiquidacionResult({ result }) {
 
   const descarga = data?.descarga;
   const tramitesTabla = data?.tramitesTabla || [];
-  const tarifa = data?.tarifa;
+  const tramitesEnviados = data?.tramites || [];
 
   return (
     <div className="space-y-4 animate-slide-up">
@@ -103,13 +103,18 @@ function LiquidacionResult({ result }) {
                 <span className="text-[#1e293b] font-medium">{descarga.liquidacionId}</span>
               </div>
             )}
-            {descarga.filePath && (
-              <div className="sm:col-span-2">
-                <span className="text-[#64748b]">Ruta: </span>
-                <span className="text-[#64748b] text-xs break-all">{descarga.filePath}</span>
-              </div>
-            )}
           </div>
+
+          {/* Botón de descarga */}
+          <a
+            href={`${API_BASE}/descargar/${descarga.fileName}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-flex items-center gap-2 bg-[#00ABE4] hover:bg-[#0095C5] text-white px-5 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium"
+          >
+            <Download className="w-4 h-4" />
+            Descargar PDF
+          </a>
         </div>
       )}
 
@@ -128,33 +133,21 @@ function LiquidacionResult({ result }) {
             </>
           )}
 
-          <span className="text-[#64748b]">Trámite:</span>
-          <span className="text-[#1e293b] font-medium">{data?.tramite || "—"}</span>
+          <span className="text-[#64748b]">Trámites:</span>
+          <span className="text-[#1e293b] font-medium">
+            {tramitesEnviados.length > 0
+              ? tramitesEnviados.map(t => t.tramite?.replace('TRÁMITE ', '')).join(', ')
+              : '—'}
+          </span>
 
-          {data?.clasificacion && (
-            <>
-              <span className="text-[#64748b]">Clasificación:</span>
-              <span className="text-[#1e293b] font-medium">{data.clasificacion}</span>
-            </>
-          )}
-
-          {tarifa?.tarifa && (
-            <>
-              <span className="text-[#64748b]">Tarifa aplicada:</span>
-              <span className="text-[#1e293b] font-medium">{tarifa.tarifa}</span>
-            </>
-          )}
-
-          {tarifa?.tipo === 'sweetalert' && (
-            <>
-              <span className="text-[#64748b]">Tarifa:</span>
-              <span className="text-[#1e293b] font-medium text-amber-600">Sin tarifa (confirmación vía popup RUNT)</span>
-            </>
-          )}
+          <span className="text-[#64748b]">Clasificación:</span>
+          <span className="text-[#1e293b] font-medium">
+            {tramitesEnviados.length > 0 ? tramitesEnviados[0].clasificacion : '—'}
+          </span>
         </div>
       </div>
 
-      {/* Tabla de trámites liquidados */}
+      {/* Tabla de trámites liquidados (desde RUNT) */}
       {tramitesTabla.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <h3 className="font-semibold text-[#1e293b] mb-3">Trámites liquidados ({tramitesTabla.length})</h3>
@@ -207,10 +200,13 @@ export default function LiquidarRunt() {
     numeroDocumentoSolicitante: "901769233",
     nombreSolicitante: "",
     registro: "RNA", // Fijo
-    placa: "",
-    tramite: "",
-    clasificacion: ""
+    placa: ""
   });
+
+  // ── Estado para multi-trámite ──
+  const [tramiteActual, setTramiteActual] = useState("");
+  const [clasificacionActual, setClasificacionActual] = useState("");
+  const [tramitesList, setTramitesList] = useState([]);
 
   // ── Estados de UI ──
   const [loading, setLoading] = useState(false);
@@ -224,12 +220,53 @@ export default function LiquidarRunt() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  // ── Agregar trámite a la lista ──
+  const handleAgregarTramite = () => {
+    if (!tramiteActual.trim()) {
+      toast.error("Seleccione un trámite");
+      return;
+    }
+    if (!clasificacionActual.trim()) {
+      toast.error("Seleccione una clasificación");
+      return;
+    }
+
+    // Verificar duplicados
+    const yaExiste = tramitesList.some(
+      t => t.tramite === tramiteActual && t.clasificacion === clasificacionActual
+    );
+    if (yaExiste) {
+      toast.error("Este trámite ya está agregado");
+      return;
+    }
+
+    // Verificar que todas las clasificaciones sean iguales (flujo RUNT)
+    if (tramitesList.length > 0 && tramitesList[0].clasificacion !== clasificacionActual) {
+      toast.error("Todos los trámites deben compartir la misma clasificación (flujo RUNT)");
+      return;
+    }
+
+    setTramitesList(prev => [...prev, {
+      tramite: tramiteActual,
+      clasificacion: clasificacionActual
+    }]);
+
+    // Mantener la clasificación para el siguiente trámite (flujo RUNT)
+    // Limpiar solo el trámite para seleccionar el siguiente
+    setTramiteActual("");
+    toast.success(`Agregado: ${TRAMITES_DISPONIBLES.find(t => t.value === tramiteActual)?.label || tramiteActual}`);
+  };
+
+  // ── Eliminar trámite de la lista ──
+  const handleEliminarTramite = (index) => {
+    setTramitesList(prev => prev.filter((_, i) => i !== index));
+  };
+
   // ── Validación ──
   const obtenerErrores = () => {
     const errores = [];
     if (!form.placa.trim()) errores.push("La placa es obligatoria");
-    if (!form.tramite.trim()) errores.push("Seleccione un trámite");
-    if (!form.clasificacion.trim()) errores.push("Seleccione una clasificación");
+    if (tramitesList.length === 0) errores.push("Agregue al menos un trámite");
     return errores;
   };
 
@@ -248,10 +285,8 @@ export default function LiquidarRunt() {
       setResultado(null);
 
       const payload = {
-        registro: "RNA",
         placa: form.placa,
-        tramite: form.tramite,
-        clasificacion: form.clasificacion
+        tramites: tramitesList
       };
 
       const resp = await consultarLiquidacion(payload);
@@ -273,25 +308,28 @@ export default function LiquidarRunt() {
     }
   };
 
-  // ── Crear trabajo (worker) ──
+  // ── Crear trabajo (worker) — un item por trámite ──
   const handleCrearTrabajo = async () => {
-    const erroresTrabajo = obtenerErrores();
-    if (erroresTrabajo.length > 0) {
-      erroresTrabajo.forEach((e) => toast.error(e));
+    if (tramitesList.length === 0) {
+      toast.error("Agregue al menos un trámite");
+      return;
+    }
+    if (!form.placa.trim()) {
+      toast.error("La placa es obligatoria");
       return;
     }
 
     try {
       setLoadingJob(true);
 
-      const item = {
+      const items = tramitesList.map(t => ({
         registro: "RNA",
         placa: form.placa,
-        tramite: form.tramite,
-        clasificacion: form.clasificacion
-      };
+        tramite: t.tramite,
+        clasificacion: t.clasificacion
+      }));
 
-      const resp = await crearJob("liquidaciones", [item]);
+      const resp = await crearJob("liquidaciones", items);
 
       if (resp.job?.id_job) {
         setJobActual(resp.job.id_job);
@@ -371,7 +409,7 @@ export default function LiquidarRunt() {
           <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center gap-2">
             <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <span className="text-sm text-blue-700 font-medium">
-              Registro RNA — una liquidación por solicitud
+              Registro RNA — todos los trámites comparten la misma clasificación
             </span>
           </div>
 
@@ -384,37 +422,90 @@ export default function LiquidarRunt() {
               onChange={handleChange}
               placeholder="Ej: ABC123"
             />
-
-            {/* Trámite */}
-            <SelectField
-              label="Trámite *"
-              name="tramite"
-              value={form.tramite}
-              onChange={handleChange}
-              options={[
-                { value: "", label: "Seleccione un trámite" },
-                ...TRAMITES_DISPONIBLES
-              ]}
-            />
-
-            {/* Clasificación */}
-            <SelectField
-              label="Clasificación *"
-              name="clasificacion"
-              value={form.clasificacion}
-              onChange={handleChange}
-              options={[
-                { value: "", label: "Seleccione una clasificación" },
-                ...CLASIFICACIONES_DISPONIBLES
-              ]}
-            />
           </div>
+
+          {/* ── Agregar trámite ── */}
+          <div className="mt-4 p-4 bg-[#F8FAFC] border border-slate-200 rounded-xl">
+            <h3 className="text-sm font-semibold text-[#1e293b] mb-3">Agregar trámite</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <SelectField
+                label="Trámite"
+                name="tramiteActual"
+                value={tramiteActual}
+                onChange={(e) => setTramiteActual(e.target.value)}
+                options={[
+                  { value: "", label: "Seleccione" },
+                  ...TRAMITES_DISPONIBLES
+                ]}
+              />
+
+              <SelectField
+                label="Clasificación"
+                name="clasificacionActual"
+                value={clasificacionActual}
+                onChange={(e) => setClasificacionActual(e.target.value)}
+                options={[
+                  { value: "", label: "Seleccione" },
+                  ...CLASIFICACIONES_DISPONIBLES
+                ]}
+              />
+
+              <div className="flex items-end">
+                <button
+                  onClick={handleAgregarTramite}
+                  className="w-full bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Agregar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Lista de trámites agregados ── */}
+          {tramitesList.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold text-[#1e293b] mb-2">
+                Trámites seleccionados ({tramitesList.length})
+              </h3>
+              <div className="space-y-2">
+                {tramitesList.map((t, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 h-6 rounded-full bg-[#00ABE4] text-white text-xs font-bold flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-[#1e293b]">
+                          {TRAMITES_DISPONIBLES.find(td => td.value === t.tramite)?.label || t.tramite}
+                        </p>
+                        <p className="text-xs text-[#64748b]">{t.clasificacion}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleEliminarTramite(i)}
+                      className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      title="Eliminar trámite"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Información de tarifa automática */}
           <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
             <p className="text-xs text-amber-700">
               <strong>Tarifa automática:</strong> Se selecciona según la combinación trámite + clasificación.
               Para MEDIDAS CAUTELARES se mostrará un popup de confirmación en el RUNT.
+              {tramitesList.length > 0 && (
+                <> <strong>Clasificación única:</strong> {tramitesList[0].clasificacion}.</>
+              )}
             </p>
           </div>
         </div>
