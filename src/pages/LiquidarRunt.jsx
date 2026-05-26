@@ -3,9 +3,7 @@ import Header from "../components/Header";
 import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
 import { consultarLiquidacion, API_BASE } from "../services/liquidacionApi";
-import { crearJob } from "../services/workerJobsApi";
-import JobProgress from "../components/JobProgress";
-import { Loader2, Briefcase, FileText, CheckCircle2, AlertCircle, Download, Plus, Trash2 } from "lucide-react";
+import { Loader2, FileText, CheckCircle2, AlertCircle, Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 // ─────────────────────────────────────────────
@@ -75,12 +73,12 @@ function LiquidacionResult({ result }) {
           <CheckCircle2 className="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <h3 className="font-semibold text-green-700 mb-1">Liquidación generada correctamente</h3>
-            <p className="text-green-600 text-sm">Comprobante descargado del RUNT</p>
+            <p className="text-green-600 text-sm">PDF abierto en una nueva pestaña — puede imprimirlo directamente</p>
           </div>
         </div>
       </div>
 
-      {/* Descarga PDF */}
+      {/* Info del PDF */}
       {descarga && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <h3 className="font-semibold text-[#1e293b] mb-3 flex items-center gap-2">
@@ -104,17 +102,6 @@ function LiquidacionResult({ result }) {
               </div>
             )}
           </div>
-
-          {/* Botón de descarga */}
-          <a
-            href={`${API_BASE}/descargar/${descarga.fileName}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 inline-flex items-center gap-2 bg-[#00ABE4] hover:bg-[#0095C5] text-white px-5 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium"
-          >
-            <Download className="w-4 h-4" />
-            Descargar PDF
-          </a>
         </div>
       )}
 
@@ -210,8 +197,6 @@ export default function LiquidarRunt() {
 
   // ── Estados de UI ──
   const [loading, setLoading] = useState(false);
-  const [loadingJob, setLoadingJob] = useState(false);
-  const [jobActual, setJobActual] = useState(null);
   const [resultado, setResultado] = useState(null);
 
   // ── Manejadores de cambio ──
@@ -273,7 +258,7 @@ export default function LiquidarRunt() {
   const errores = obtenerErrores();
   const puedeEnviar = errores.length === 0;
 
-  // ── Generar liquidación (directo) ──
+  // ── Generar liquidación → muestra PDF directo en el navegador ──
   const handleGenerar = async () => {
     if (!puedeEnviar) {
       errores.forEach((e) => toast.error(e));
@@ -294,6 +279,14 @@ export default function LiquidarRunt() {
       if (resp.ok) {
         setResultado({ ok: true, data: resp.data, error: null });
         toast.success("Liquidación generada exitosamente");
+
+        // Abrir PDF directo en el navegador para imprimir
+        if (resp.data?.descarga?.fileName) {
+          abrirPDF(resp.data.descarga.fileName);
+        }
+
+        // Resetear formulario automáticamente
+        resetForm();
       } else {
         setResultado({ ok: false, data: null, error: resp.error || "Ocurrió un error" });
       }
@@ -308,41 +301,17 @@ export default function LiquidarRunt() {
     }
   };
 
-  // ── Crear trabajo (worker) — UN solo item con TODOS los trámites ──
-  const handleCrearTrabajo = async () => {
-    if (tramitesList.length === 0) {
-      toast.error("Agregue al menos un trámite");
-      return;
-    }
-    if (!form.placa.trim()) {
-      toast.error("La placa es obligatoria");
-      return;
-    }
+  // ── Abrir PDF en el navegador + resetear formulario ──
+  const abrirPDF = (fileName) => {
+    const url = `${API_BASE}/descargar/${fileName}`;
+    window.open(url, '_blank');
+  };
 
-    try {
-      setLoadingJob(true);
-
-      // Un solo item con el array de tramites → una sola liquidación
-      const items = [{
-        registro: "RNA",
-        placa: form.placa,
-        tramites: tramitesList.map(t => ({
-          tramite: t.tramite,
-          clasificacion: t.clasificacion
-        }))
-      }];
-
-      const resp = await crearJob("liquidaciones", items);
-
-      if (resp.job?.id_job) {
-        setJobActual(resp.job.id_job);
-        toast.success("Trabajo creado exitosamente");
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error al crear trabajo");
-    } finally {
-      setLoadingJob(false);
-    }
+  const resetForm = () => {
+    setTramitesList([]);
+    setTramiteActual("");
+    setClasificacionActual("");
+    setResultado(null);
   };
 
   return (
@@ -437,7 +406,7 @@ export default function LiquidarRunt() {
                 value={tramiteActual}
                 onChange={(e) => setTramiteActual(e.target.value)}
                 options={[
-                  { value: "", label: "Seleccione" },
+                  
                   ...TRAMITES_DISPONIBLES
                 ]}
               />
@@ -448,7 +417,7 @@ export default function LiquidarRunt() {
                 value={clasificacionActual}
                 onChange={(e) => setClasificacionActual(e.target.value)}
                 options={[
-                  { value: "", label: "Seleccione" },
+                  
                   ...CLASIFICACIONES_DISPONIBLES
                 ]}
               />
@@ -534,25 +503,16 @@ export default function LiquidarRunt() {
         {resultado && <LiquidacionResult result={resultado} />}
 
         {/* ── Botones ── */}
-        <div className="flex justify-end gap-3 animate-slide-up" style={{ animationDelay: "0.3s" }}>
-          <button
-            onClick={handleCrearTrabajo}
-            disabled={loadingJob}
-            className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-md transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed hover:shadow-lg flex items-center gap-2"
-          >
-            {loadingJob ? <Loader2 className="w-5 h-5 animate-spin" /> : <Briefcase className="w-5 h-5" />}
-            Crear trabajo
-          </button>
-
+        <div className="flex justify-end animate-slide-up" style={{ animationDelay: "0.3s" }}>
           <button
             onClick={handleGenerar}
             disabled={loading || !puedeEnviar}
-            className="bg-[#00ABE4] hover:bg-[#0095C5] text-white px-6 py-3 rounded-xl shadow-md transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed hover:shadow-lg flex items-center gap-2"
+            className="bg-[#00ABE4] hover:bg-[#0095C5] text-white px-8 py-3 rounded-xl shadow-md transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed hover:shadow-lg flex items-center gap-2 text-base"
           >
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Procesando...
+                Procesando liquidación...
               </>
             ) : (
               <>
@@ -562,17 +522,6 @@ export default function LiquidarRunt() {
             )}
           </button>
         </div>
-
-        {/* ── Progreso del trabajo ── */}
-        {jobActual && (
-          <div className="animate-slide-up">
-            <JobProgress
-              jobId={jobActual}
-              onClose={() => setJobActual(null)}
-              onComplete={() => {}}
-            />
-          </div>
-        )}
       </div>
     </div>
   );
