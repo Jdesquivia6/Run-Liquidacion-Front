@@ -28,7 +28,7 @@ export default function InputField({
           w-full
           border border-[#cbd5e1]
           rounded-xl
-          px-4 py-2.5
+          px-4 py-3
           text-[#1e293b]
           placeholder:text-[#64748b]
           focus:outline-none

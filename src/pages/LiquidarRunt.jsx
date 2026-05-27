@@ -26,11 +26,6 @@ const CLASIFICACIONES_DISPONIBLES = [
 // HELPERS
 // ─────────────────────────────────────────────
 
-function getFechaColombia() {
-  return new Date().toLocaleDateString("es-CO", { timeZone: "America/Bogota" })
-    .split('/').reverse().join('-');
-}
-
 function formatBytes(bytes) {
   if (!bytes) return "N/A";
   if (bytes < 1024) return `${bytes} B`;
@@ -80,13 +75,13 @@ function LiquidacionResult({ result }) {
 
       {/* Info del PDF */}
       {descarga && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <h3 className="font-semibold text-[#1e293b] mb-3 flex items-center gap-2">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm">
+          <h3 className="font-semibold text-[#1e293b] mb-3 md:text-lg flex items-center gap-2">
             <FileText className="w-5 h-5 text-[#00ABE4]" />
             PDF generado
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 text-sm md:text-base">
             <div>
               <span className="text-[#64748b]">Archivo: </span>
               <span className="text-[#1e293b] font-medium">{descarga.fileName}</span>
@@ -106,10 +101,10 @@ function LiquidacionResult({ result }) {
       )}
 
       {/* Resumen */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-        <h3 className="font-semibold text-[#1e293b] mb-3">Resumen de la liquidación</h3>
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm">
+          <h3 className="font-semibold text-[#1e293b] mb-3 md:text-lg">Resumen de la liquidación</h3>
 
-        <div className="grid grid-cols-2 gap-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-y-3 text-sm md:text-base">
           <span className="text-[#64748b]">Registro:</span>
           <span className="text-[#1e293b] font-medium">RNA</span>
 
@@ -139,20 +134,20 @@ function LiquidacionResult({ result }) {
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <h3 className="font-semibold text-[#1e293b] mb-3">Trámites liquidados ({tramitesTabla.length})</h3>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-sm md:text-base">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="py-2 pr-4 text-[#64748b] font-medium">#</th>
-                  <th className="py-2 pr-4 text-[#64748b] font-medium">Nombre</th>
-                  <th className="py-2 text-[#64748b] font-medium">Tarifa</th>
+                  <th className="py-3 pr-4 text-[#64748b] font-medium">#</th>
+                  <th className="py-3 pr-4 text-[#64748b] font-medium">Nombre</th>
+                  <th className="py-3 text-[#64748b] font-medium">Tarifa</th>
                 </tr>
               </thead>
               <tbody>
                 {tramitesTabla.map((t, i) => (
                   <tr key={i} className="border-b border-slate-50 hover:bg-[#F8FAFC]">
-                    <td className="py-2 pr-4 text-[#1e293b]">{t.id || i + 1}</td>
-                    <td className="py-2 pr-4 text-[#1e293b]">{t.nombre}</td>
-                    <td className="py-2 text-[#64748b]">{t.tarifa || "—"}</td>
+                    <td className="py-3 pr-4 text-[#1e293b]">{t.id || i + 1}</td>
+                    <td className="py-3 pr-4 text-[#1e293b]">{t.nombre}</td>
+                    <td className="py-3 text-[#64748b]">{t.tarifa || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -163,7 +158,7 @@ function LiquidacionResult({ result }) {
 
       {/* Solicitante */}
       {data?.nombreSolicitante && (
-        <div className="bg-[#E9F1FA] rounded-2xl p-4 text-sm">
+        <div className="bg-[#E9F1FA] rounded-2xl p-4 md:p-5 text-sm md:text-base">
           <span className="text-[#64748b]">Solicitante: </span>
           <span className="text-[#1e293b] font-medium">
             {data.nombreSolicitante} ({data.tipoDocumentoSolicitante} {data.numeroDocumentoSolicitante})
@@ -180,15 +175,7 @@ function LiquidacionResult({ result }) {
 
 export default function LiquidarRunt() {
   // ── Estado del formulario ──
-  const [form, setForm] = useState({
-    organismoTransito: "SECRETARÍA DE TRÁNSITO DE SABANAGRANDE",
-    fechaLiquidacion: getFechaColombia(),
-    tipoDocumentoSolicitante: "NIT",
-    numeroDocumentoSolicitante: "901769233",
-    nombreSolicitante: "",
-    registro: "RNA", // Fijo
-    placa: ""
-  });
+  const [placa, setPlaca] = useState("");
 
   // ── Estado para multi-trámite ──
   const [tramiteActual, setTramiteActual] = useState("");
@@ -198,12 +185,6 @@ export default function LiquidarRunt() {
   // ── Estados de UI ──
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState(null);
-
-  // ── Manejadores de cambio ──
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
 
   // ── Agregar trámite a la lista ──
   const handleAgregarTramite = () => {
@@ -250,7 +231,7 @@ export default function LiquidarRunt() {
   // ── Validación ──
   const obtenerErrores = () => {
     const errores = [];
-    if (!form.placa.trim()) errores.push("La placa es obligatoria");
+    if (!placa.trim()) errores.push("La placa es obligatoria");
     if (tramitesList.length === 0) errores.push("Agregue al menos un trámite");
     return errores;
   };
@@ -269,9 +250,11 @@ export default function LiquidarRunt() {
       setLoading(true);
       setResultado(null);
 
+      const fechaHoy = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       const payload = {
-        placa: form.placa,
-        tramites: tramitesList
+        placa,
+        tramites: tramitesList,
+        fechaLiquidacion: fechaHoy
       };
 
       const resp = await consultarLiquidacion(payload);
@@ -318,88 +301,36 @@ export default function LiquidarRunt() {
     <div className="min-h-screen bg-[#E9F1FA]">
       <Header />
 
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
-        {/* ── Información Básica ── */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 animate-slide-up">
-          <h2 className="text-xl font-bold text-[#1e293b] mb-6">
-            Información Básica
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField
-              label="Organismo de Tránsito"
-              name="organismoTransito"
-              value={form.organismoTransito}
-              onChange={handleChange}
-              readOnly
-            />
-
-            <InputField
-              label="Fecha liquidación"
-              name="fechaLiquidacion"
-              type="date"
-              value={form.fechaLiquidacion}
-              onChange={handleChange}
-            />
-
-            <SelectField
-              label="Tipo documento solicitante"
-              name="tipoDocumentoSolicitante"
-              value={form.tipoDocumentoSolicitante}
-              onChange={handleChange}
-              options={[{ value: "NIT", label: "NIT" }]}
-              disabled
-            />
-
-            <InputField
-              label="Número documento solicitante"
-              name="numeroDocumentoSolicitante"
-              value={form.numeroDocumentoSolicitante}
-              onChange={handleChange}
-              readOnly
-            />
-
-            <InputField
-              label="Nombre solicitante"
-              name="nombreSolicitante"
-              value={form.nombreSolicitante}
-              onChange={handleChange}
-              className="md:col-span-2"
-              readOnly
-              placeholder="Se cargará automáticamente desde el scraper"
-            />
-          </div>
-        </div>
-
+      <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-5 md:space-y-6">
         {/* ── Datos de la liquidación ── */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 animate-slide-up" style={{ animationDelay: "0.1s" }}>
-          <h2 className="text-xl font-bold text-[#1e293b] mb-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6 animate-slide-up">
+          <h2 className="text-lg md:text-xl font-bold text-[#1e293b] mb-5 md:mb-6">
             Trámites a liquidar (RNA)
           </h2>
 
           {/* Badge RNA */}
-          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
-            <span className="text-sm text-blue-700 font-medium">
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-500 flex-shrink-0" />
+            <span className="text-sm md:text-base text-blue-700 font-medium">
               Registro RNA — todos los trámites comparten la misma clasificación
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Placa */}
+          {/* Placa */}
+          <div className="mb-4">
             <InputField
               label="Número de placa *"
               name="placa"
-              value={form.placa}
-              onChange={handleChange}
+              value={placa}
+              onChange={(e) => setPlaca(e.target.value)}
               placeholder="Ej: ABC123"
             />
           </div>
 
           {/* ── Agregar trámite ── */}
-          <div className="mt-4 p-4 bg-[#F8FAFC] border border-slate-200 rounded-xl">
-            <h3 className="text-sm font-semibold text-[#1e293b] mb-3">Agregar trámite</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="p-4 md:p-5 bg-[#F8FAFC] border border-slate-200 rounded-xl">
+            <h3 className="text-sm md:text-base font-semibold text-[#1e293b] mb-3">Agregar trámite</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
               <SelectField
                 label="Trámite"
                 name="tramiteActual"
@@ -425,9 +356,9 @@ export default function LiquidarRunt() {
               <div className="flex items-end">
                 <button
                   onClick={handleAgregarTramite}
-                  className="w-full bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium"
+                  className="w-full bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm md:text-base font-medium active:scale-95"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-5 h-5" />
                   Agregar
                 </button>
               </div>
@@ -436,33 +367,33 @@ export default function LiquidarRunt() {
 
           {/* ── Lista de trámites agregados ── */}
           {tramitesList.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-sm font-semibold text-[#1e293b] mb-2">
+            <div className="mt-5">
+              <h3 className="text-sm md:text-base font-semibold text-[#1e293b] mb-3">
                 Trámites seleccionados ({tramitesList.length})
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {tramitesList.map((t, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3"
+                    className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3.5"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 rounded-full bg-[#00ABE4] text-white text-xs font-bold flex items-center justify-center">
+                      <span className="w-7 h-7 rounded-full bg-[#00ABE4] text-white text-sm font-bold flex items-center justify-center">
                         {i + 1}
                       </span>
                       <div>
-                        <p className="text-sm font-medium text-[#1e293b]">
+                        <p className="text-sm md:text-base font-medium text-[#1e293b]">
                           {TRAMITES_DISPONIBLES.find(td => td.value === t.tramite)?.label || t.tramite}
                         </p>
-                        <p className="text-xs text-[#64748b]">{t.clasificacion}</p>
+                        <p className="text-xs md:text-sm text-[#64748b]">{t.clasificacion}</p>
                       </div>
                     </div>
                     <button
                       onClick={() => handleEliminarTramite(i)}
-                      className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all active:scale-90"
                       title="Eliminar trámite"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
                 ))}
@@ -471,8 +402,8 @@ export default function LiquidarRunt() {
           )}
 
           {/* Información de tarifa automática */}
-          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-            <p className="text-xs text-amber-700">
+          <div className="mt-5 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-xs md:text-sm text-amber-700">
               <strong>Tarifa automática:</strong> Se selecciona según la combinación trámite + clasificación.
               Para MEDIDAS CAUTELARES se mostrará un popup de confirmación en el RUNT.
               {tramitesList.length > 0 && (
@@ -484,14 +415,14 @@ export default function LiquidarRunt() {
 
         {/* ── Errores de validación ── */}
         {!puedeEnviar && errores.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 animate-slide-up">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 md:p-5 animate-slide-up">
             <div className="flex items-start gap-2 mb-2">
               <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <span className="text-sm font-semibold text-red-700">
+              <span className="text-sm md:text-base font-semibold text-red-700">
                 Complete los campos obligatorios
               </span>
             </div>
-            <ul className="text-sm text-red-600 space-y-0.5 pl-7">
+            <ul className="text-sm md:text-base text-red-600 space-y-1 pl-7">
               {errores.map((e, i) => (
                 <li key={i}>{e}</li>
               ))}
@@ -503,11 +434,11 @@ export default function LiquidarRunt() {
         {resultado && <LiquidacionResult result={resultado} />}
 
         {/* ── Botones ── */}
-        <div className="flex justify-end animate-slide-up" style={{ animationDelay: "0.3s" }}>
+        <div className="flex flex-col sm:flex-row sm:justify-end animate-slide-up" style={{ animationDelay: "0.3s" }}>
           <button
             onClick={handleGenerar}
             disabled={loading || !puedeEnviar}
-            className="bg-[#00ABE4] hover:bg-[#0095C5] text-white px-8 py-3 rounded-xl shadow-md transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed hover:shadow-lg flex items-center gap-2 text-base"
+            className="w-full sm:w-auto bg-[#00ABE4] hover:bg-[#0095C5] text-white px-8 py-3.5 rounded-xl shadow-md transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed hover:shadow-lg flex items-center justify-center gap-2 text-base md:text-lg active:scale-95"
           >
             {loading ? (
               <>

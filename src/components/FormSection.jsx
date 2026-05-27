@@ -22,7 +22,7 @@ export default function SelectField({
           w-full
           border border-[#cbd5e1]
           rounded-xl
-          px-4 py-2.5
+          px-4 py-3
           text-[#1e293b]
           bg-white
           focus:outline-none

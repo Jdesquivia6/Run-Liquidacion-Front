@@ -16,7 +16,6 @@ export default function Header() {
             Liquidar valores RUNT
           </h1>
         </div>
-
       </div>
     </header>
   );
