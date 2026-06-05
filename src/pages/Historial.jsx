@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { API_BASE } from "../config";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Pagination, Navigation } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/pagination";
 import "swiper/css/navigation";
+import * as XLSX from "xlsx";
 import {
   MapPin,
   Users,
@@ -14,9 +16,9 @@ import {
   XCircle,
   AlertCircle,
   RefreshCw,
-  Filter,
+  TrendingUp,
   Download,
-  TrendingUp
+  FileText
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -34,14 +36,28 @@ const COLORS = {
 };
 
 const MODULOS = [
-  { id: "todos", label: "Todos", icon: Filter },
-  { id: "consulta-placa", label: "Consulta Placa", icon: Search },
+  { id: "todos", label: "Todos", icon: Search },
+  { id: "consulta-placa", label: "Consulta Placa", icon: FileText },
   { id: "datos-vehiculo", label: "Datos Vehículo", icon: Car },
   { id: "personas-direcciones", label: "Direcciones", icon: MapPin },
   { id: "liquidacion", label: "Liquidaciones", icon: TrendingUp }
 ];
 
-const ITEMS_POR_PAGINA = 10;
+const MODULO_COLORS = {
+  "consulta-placa": { bg: "#DBEAFE", text: "#1D4ED8" },
+  "datos-vehiculo": { bg: "#D1FAE5", text: "#047857" },
+  "personas-direcciones": { bg: "#FEF3C7", text: "#B45309" },
+  liquidacion: { bg: "#EDE9FE", text: "#7C3AED" }
+};
+
+const MODULO_LABELS = {
+  "consulta-placa": "Consulta Placa",
+  "datos-vehiculo": "Datos Vehículo",
+  "personas-direcciones": "Direcciones",
+  liquidacion: "Liquidaciones"
+};
+
+const ITEMS_POR_PAGINA = 15;
 
 function formatFechaColombia(fecha) {
   if (!fecha) return "—";
@@ -50,23 +66,43 @@ function formatFechaColombia(fecha) {
   return parsed.toLocaleString("es-CO", { timeZone: "America/Bogota" });
 }
 
+function formatFechaCorta(fecha) {
+  if (!fecha) return "—";
+  const parsed = new Date(fecha);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+}
+
+const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+
 export default function Historial() {
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(false);
   const [moduloActivo, setModuloActivo] = useState("todos");
-  const [filtroFecha, setFiltroFecha] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
   const [pageProgress, setPageProgress] = useState(1);
+  const [meta, setMeta] = useState({ total: 0, totalPaginas: 0 });
 
-  const cargarHistorial = async () => {
+  const buildUrl = useCallback(() => {
+    const params = new URLSearchParams();
+    if (moduloActivo !== "todos") params.set("modulo", moduloActivo);
+    if (fechaInicio) params.set("fechaInicio", fechaInicio);
+    if (fechaFin) params.set("fechaFin", fechaFin);
+    params.set("pagina", String(pageProgress));
+    params.set("limite", String(ITEMS_POR_PAGINA));
+    return `${API_BASE}/historial?${params.toString()}`;
+  }, [moduloActivo, fechaInicio, fechaFin, pageProgress]);
+
+  const cargarHistorial = useCallback(async () => {
     try {
       setLoading(true);
-      
-      let url = "http://84.247.165.214:3000/api/historial-vehiculos";
-      
-      if (moduloActivo !== "todos") {
-        url = `http://84.247.165.214:3000/api/historial-vehiculos?modulo=${moduloActivo}`;
-      }
-
+      const url = buildUrl();
       const response = await fetch(url);
       const data = await response.json();
 
@@ -74,42 +110,96 @@ export default function Historial() {
         throw new Error(data.error || "Error cargando historial");
       }
 
-      let items = data.results || [];
-
-      // Filtro por fecha si se selecciona
-      if (filtroFecha) {
-        items = items.filter((item) => {
-          const fechaItem = item.fecha?.split("T")[0];
-          return fechaItem === filtroFecha;
-        });
-      }
-
-      setRegistros(items);
-      setPageProgress(1);
-
+      setRegistros(data.results || []);
+      setMeta({
+        total: data.total || 0,
+        totalPaginas: data.totalPaginas || 0
+      });
     } catch (err) {
       toast.error(err.message);
+      setRegistros([]);
+      setMeta({ total: 0, totalPaginas: 0 });
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildUrl]);
 
+  // Recargar cuando cambia módulo (vuelve a página 1)
+  useEffect(() => {
+    setPageProgress(1);
+  }, [moduloActivo, fechaInicio, fechaFin]);
+
+  // Cargar datos cuando cambia página
   useEffect(() => {
     cargarHistorial();
-  }, [moduloActivo]);
+  }, [cargarHistorial]);
 
-  const totalPaginas = Math.max(1, Math.ceil(registros.length / ITEMS_POR_PAGINA));
+  // Resumen
+  const exitosas = registros.filter((r) => r.estado === true).length;
+  const fallidas = registros.filter((r) => r.estado !== true).length;
 
-  const registrosPagina = registros.slice(
-    (pageProgress - 1) * ITEMS_POR_PAGINA,
-    pageProgress * ITEMS_POR_PAGINA
-  );
+  const exportarExcel = () => {
+    try {
+      const headers = [
+        "Fecha", "Placa / Documento", "Módulo", "Estado", "Detalle",
+        "Propietario", "Tipo Documento", "Número Documento",
+        "Clase", "Marca", "Línea", "Modelo", "Color", "Servicio",
+        "Nombres", "Apellidos", "Celular", "Correo",
+        "Trámites"
+      ];
 
-  const resumenModulo = {
-    total: registros.length,
-    exitosas: registros.filter((r) => r.ok || r.estado_consulta).length,
-    fallidas: registros.filter((r) => !r.ok && !r.estado_consulta).length
+      const wsData = [headers];
+
+      for (const r of registros) {
+        wsData.push([
+          formatFechaColombia(r.fecha),
+          r.placa_documento || "—",
+          MODULO_LABELS[r.modulo] || r.modulo,
+          r.estado === true ? "Exitosa" : "Fallida",
+          r.estado === true ? "OK" : (r.detalle || "Error"),
+          r.propietario || "—",
+          r.tipo_documento_propietario || "—",
+          r.numero_documento_propietario || "—",
+          r.clase || "—",
+          r.marca || "—",
+          r.linea || "—",
+          r.modelo || "—",
+          r.color || "—",
+          r.servicio || "—",
+          r.nombres || "—",
+          r.apellidos || "—",
+          r.celular || "—",
+          r.correo || "—",
+          r.tramites || "—"
+        ]);
+      }
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Ancho de columnas
+      ws["!cols"] = [
+        { wch: 22 }, { wch: 16 }, { wch: 18 }, { wch: 10 }, { wch: 36 },
+        { wch: 30 }, { wch: 14 }, { wch: 18 },
+        { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 8 }, { wch: 12 }, { wch: 14 },
+        { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 30 },
+        { wch: 30 }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, "Historial");
+      XLSX.writeFile(wb, `historial_${new Date().toISOString().split("T")[0]}.xlsx`);
+      toast.success("Excel exportado correctamente");
+    } catch (err) {
+      toast.error("Error exportando Excel: " + err.message);
+    }
   };
+
+  const handleRefresh = () => {
+    cargarHistorial();
+  };
+
+  const totalPaginas = Math.max(1, meta.totalPaginas);
+  const totalRegistros = meta.total;
 
   return (
     <div className="min-h-screen p-4 md:p-6 lg:p-8" style={{ backgroundColor: COLORS.pageBg }}>
@@ -123,32 +213,29 @@ export default function Historial() {
           <div className="absolute top-4 right-4 opacity-20">
             <Clock size={100} />
           </div>
-
           <div className="relative z-10">
             <p className="text-blue-100 text-sm font-medium flex items-center gap-2">
               <Clock size={16} />
               Historial General
             </p>
-
             <h2 className="text-3xl md:text-4xl font-bold mt-2">
               Registro de Consultas
             </h2>
-
             <p className="text-blue-100 mt-3 max-w-3xl">
               Consulta el historial de todas las operaciones realizadas en el sistema.
-              Filtra por módulo y fecha para encontrar registros específicos.
+              Filtra por módulo y rango de fechas para encontrar registros específicos.
             </p>
           </div>
         </section>
 
         {/* RESUMEN DE ACTIVIDAD */}
-        <section className="grid grid-cols-3 lg:grid-cols-3 gap-4">
+        <section className="grid grid-cols-3 gap-4">
           <div className="rounded-3xl p-5 shadow-sm" style={{ backgroundColor: COLORS.cardBg, boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)" }}>
             <div className="flex items-center gap-2 mb-2">
               <Users size={18} style={{ color: COLORS.primary }} />
               <span className="text-xs font-medium" style={{ color: COLORS.textSecondary }}>Total Registros</span>
             </div>
-            <p className="text-2xl font-bold" style={{ color: COLORS.textPrimary }}>{resumenModulo.total}</p>
+            <p className="text-2xl font-bold" style={{ color: COLORS.textPrimary }}>{totalRegistros}</p>
           </div>
 
           <div className="rounded-3xl p-5 shadow-sm" style={{ backgroundColor: COLORS.cardBg, boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)" }}>
@@ -156,7 +243,7 @@ export default function Historial() {
               <CheckCircle size={18} style={{ color: COLORS.success }} />
               <span className="text-xs font-medium" style={{ color: COLORS.textSecondary }}>Exitosas</span>
             </div>
-            <p className="text-2xl font-bold" style={{ color: COLORS.success }}>{resumenModulo.exitosas}</p>
+            <p className="text-2xl font-bold" style={{ color: COLORS.success }}>{exitosas}</p>
           </div>
 
           <div className="rounded-3xl p-5 shadow-sm" style={{ backgroundColor: COLORS.cardBg, boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)" }}>
@@ -164,7 +251,7 @@ export default function Historial() {
               <XCircle size={18} style={{ color: COLORS.error }} />
               <span className="text-xs font-medium" style={{ color: COLORS.textSecondary }}>Fallidas</span>
             </div>
-            <p className="text-2xl font-bold" style={{ color: COLORS.error }}>{resumenModulo.fallidas}</p>
+            <p className="text-2xl font-bold" style={{ color: COLORS.error }}>{fallidas}</p>
           </div>
         </section>
 
@@ -176,8 +263,8 @@ export default function Historial() {
             boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)"
           }}
         >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            
+          <div className="flex flex-wrap items-start justify-between gap-4">
+
             {/* Filtro por módulo */}
             <div className="flex flex-wrap gap-2">
               {MODULOS.map((mod) => {
@@ -204,18 +291,33 @@ export default function Historial() {
               })}
             </div>
 
-            {/* Filtro por fecha */}
-            <div className="flex items-center gap-3">
-              <input
-                type="date"
-                value={filtroFecha}
-                onChange={(e) => setFiltroFecha(e.target.value)}
-                className="px-4 py-2 rounded-xl border text-sm"
-                style={{ borderColor: COLORS.border }}
-              />
+            {/* Filtro por rango de fechas */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium" style={{ color: COLORS.textSecondary }}>Desde</label>
+                  <input
+                    type="date"
+                    max={today}
+                    value={fechaInicio}
+                    onChange={(e) => setFechaInicio(e.target.value)}
+                    className="px-3 py-2 rounded-xl border text-sm"
+                    style={{ borderColor: COLORS.border }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium" style={{ color: COLORS.textSecondary }}>Hasta</label>
+                  <input
+                    type="date"
+                    max={today}
+                    value={fechaFin}
+                    onChange={(e) => setFechaFin(e.target.value)}
+                    className="px-3 py-2 rounded-xl border text-sm"
+                    style={{ borderColor: COLORS.border }}
+                  />
+              </div>
 
               <button
-                onClick={cargarHistorial}
+                onClick={handleRefresh}
                 disabled={loading}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all"
                 style={{ backgroundColor: COLORS.primary }}
@@ -224,18 +326,28 @@ export default function Historial() {
                 Actualizar
               </button>
 
-              {filtroFecha && (
+              {(fechaInicio || fechaFin) && (
                 <button
                   onClick={() => {
-                    setFiltroFecha("");
-                    cargarHistorial();
+                    setFechaInicio("");
+                    setFechaFin("");
                   }}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all"
                   style={{ borderColor: COLORS.border }}
                 >
-                  Limpiar Fecha
+                  Limpiar Fechas
                 </button>
               )}
+
+              <button
+                onClick={exportarExcel}
+                disabled={registros.length === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all disabled:opacity-50"
+                style={{ borderColor: COLORS.border }}
+              >
+                <Download size={14} />
+                Excel
+              </button>
             </div>
           </div>
         </section>
@@ -250,10 +362,8 @@ export default function Historial() {
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
-              Registros ({registros.length})
+              Registros ({totalRegistros})
             </h3>
-            
-            {/* Indicador de página */}
             <span className="text-sm" style={{ color: COLORS.textSecondary }}>
               Página {pageProgress} de {totalPaginas}
             </span>
@@ -271,121 +381,91 @@ export default function Historial() {
             </div>
           ) : (
             <Swiper
-              modules={[Pagination, Navigation]}
-              pagination={{
-                type: "progressbar",
-                progressbarFillClass: "swiper-pagination-progressbar-fill",
-              }}
-              navigation={{
-                prevEl: ".swiper-button-prev",
-                nextEl: ".swiper-button-next"
-              }}
+              modules={[Navigation]}
+              navigation={true}
               onSlideChange={(swiper) => setPageProgress(swiper.activeIndex + 1)}
               spaceBetween={20}
               slidesPerView={1}
-              className="pb-12"
+              className="mySwiper"
             >
-              {registrosPagina.map((item, index) => (
-                <SwiperSlide key={index}>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ backgroundColor: COLORS.pageBg }}>
-                          <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Fecha</th>
-                          <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Placa / Documento</th>
-                          <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Módulo</th>
-                          <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Estado</th>
-                          <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Detalle</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-t" style={{ borderColor: COLORS.border }}>
-                          <td className="py-3 px-4" style={{ color: COLORS.textSecondary }}>
-                            {formatFechaColombia(item.fecha)}
-                          </td>
-                          <td className="py-3 px-4 font-mono font-bold" style={{ color: COLORS.textPrimary }}>
-                            {item.placa || item.numero_documento || "—"}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span
-                              className="px-2 py-1 rounded-full text-xs font-medium"
-                              style={{
-                                backgroundColor: COLORS.pageBg,
-                                color: COLORS.primary
-                              }}
-                            >
-                              {item.tipo_modulo || moduloActivo}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            {item.ok || item.estado_consulta ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                <CheckCircle size={12} /> OK
+              {registros.map((item, index) => {
+                const modColor = MODULO_COLORS[item.modulo] || { bg: "#F1F5F9", text: "#64748B" };
+                return (
+                  <SwiperSlide key={`${item.modulo}-${item.placa_documento}-${index}`}>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ backgroundColor: COLORS.pageBg }}>
+                            <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>
+                              Fecha
+                            </th>
+                            <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>
+                              Placa / Documento
+                            </th>
+                            <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>
+                              Módulo
+                            </th>
+                            <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>
+                              Estado
+                            </th>
+                            <th className="py-3 px-4 text-left font-semibold" style={{ color: COLORS.textSecondary }}>
+                              Detalle
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-t" style={{ borderColor: COLORS.border }}>
+                            <td className="py-3 px-4 whitespace-nowrap" style={{ color: COLORS.textSecondary }}>
+                              <span title={formatFechaColombia(item.fecha)}>
+                                {formatFechaCorta(item.fecha)}
                               </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                                <XCircle size={12} /> Error
+                            </td>
+                            <td className="py-3 px-4 font-mono font-bold" style={{ color: COLORS.textPrimary }}>
+                              {item.placa_documento || "—"}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className="px-2 py-1 rounded-full text-xs font-medium"
+                                style={{
+                                  backgroundColor: modColor.bg,
+                                  color: modColor.text
+                                }}
+                              >
+                                {MODULO_LABELS[item.modulo] || item.modulo}
                               </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 text-xs truncate max-w-[200px]" style={{ color: COLORS.textSecondary }}>
-                            {item.message || item.error_consulta || item.error || "—"}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </SwiperSlide>
-              ))}
+                            </td>
+                            <td className="py-3 px-4">
+                              {item.estado === true ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                  <CheckCircle size={12} /> OK
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                  <XCircle size={12} /> Error
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-xs max-w-[240px] truncate" style={{ color: COLORS.textSecondary }}>
+                              {item.estado === true
+                                ? "Consulta exitosa"
+                                : (item.detalle || "Error desconocido")}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </SwiperSlide>
+                );
+              })}
             </Swiper>
           )}
 
-          {/* Controles manuales por si falla el Swiper */}
-          <div className="flex items-center justify-between mt-4">
-            <button
-              onClick={() => setPageProgress(Math.max(1, pageProgress - 1))}
-              disabled={pageProgress === 1}
-              className="px-4 py-2 rounded-xl text-sm font-medium border disabled:opacity-50"
-              style={{ borderColor: COLORS.border }}
-            >
-              Anterior
-            </button>
-            
-            <div className="flex items-center gap-2">
-              {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((num) => (
-                <button
-                  key={num}
-                  onClick={() => setPageProgress(num)}
-                  className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
-                    pageProgress === num ? "text-white" : "border"
-                  }`}
-                  style={
-                    pageProgress === num
-                      ? { backgroundColor: COLORS.primary }
-                      : { borderColor: COLORS.border, color: COLORS.textSecondary }
-                  }
-                >
-                  {num}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setPageProgress(Math.min(totalPaginas, pageProgress + 1))}
-              disabled={pageProgress === totalPaginas}
-              className="px-4 py-2 rounded-xl text-sm font-medium border disabled:opacity-50"
-              style={{ borderColor: COLORS.border }}
-            >
-              Siguiente
-            </button>
-          </div>
         </section>
       </div>
     </div>
   );
 }
 
-// Icono faltante
 function Loader2({ size, className }) {
   return (
     <svg

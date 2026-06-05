@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
-import { MapPin, Users, Search, Loader2, CheckCircle, XCircle, AlertCircle, RefreshCw, Upload, Briefcase } from "lucide-react";
+import { MapPin, Users, Search, Loader2, CheckCircle, XCircle, AlertCircle, RefreshCw, Upload, Briefcase, Download } from "lucide-react";
 import toast from "react-hot-toast";
 import { crearJob } from "../services/workerJobsApi";
 import JobProgress from "../components/JobProgress";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Pagination, Navigation } from "swiper/modules";
-import "swiper/css";
-import "swiper/css/pagination";
-import "swiper/css/navigation";
+import { API_BASE } from "../config";
+import * as XLSX from "xlsx";
 
 const COLORS = {
   pageBg: "#E9F1FA",
@@ -25,7 +22,6 @@ const COLORS = {
 const tipoDocumentoOptions = [
   "C.C. Cédula Ciudadanía",
   "C.E. Cédula Extranjería",
-  "NIT",
   "Pasaporte"
 ];
 
@@ -57,15 +53,15 @@ export default function PersonasDirecciones() {
     try {
       setCargandoPendientes(true);
       
-      const response = await fetch(`http://84.247.165.214:3000/api/personas/direcciones/personas-pendientes-direcciones?limit=${limit}`);
+      const response = await fetch(`${API_BASE}/personas/direcciones/personas-pendientes-direcciones?limit=${limit}`);
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || "Error cargando personas pendientes");
       }
 
-      setPersonasPendientes(data.personas || []);
-      setGruposPendientes(data.grupos || []);
+      setPersonasPendientes((data.personas || []).filter(p => p.tipo_documento !== "NIT"));
+      setGruposPendientes((data.grupos || []).filter(g => g.tipoDocumento !== "NIT"));
       setMostrarPendientes(true);
 
       // Cargar automáticamente SOLO el primer grupo por tipo (sin mezclar)
@@ -97,7 +93,7 @@ export default function PersonasDirecciones() {
 
   const cargarHistorialDirecciones = async () => {
     try {
-      const response = await fetch("http://84.247.165.214:3000/api/personas/direcciones/historial-direcciones?limit=100");
+      const response = await fetch(`${API_BASE}/personas/direcciones/historial-direcciones?limit=100`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -108,6 +104,53 @@ export default function PersonasDirecciones() {
     } catch (err) {
       console.error("Error cargando historial direcciones:", err.message);
     }
+  };
+
+  const exportarExcel = () => {
+    if (historialDirecciones.length === 0) {
+      toast.error("No hay datos para exportar");
+      return;
+    }
+
+    const columnas = [
+      "Tipo Documento",
+      "Número Documento",
+      "Nombres",
+      "Apellidos",
+      "Celular",
+      "Correo",
+      "Dirección",
+      "Municipio / Departamento",
+      "Teléfono",
+      "Tipo Dirección",
+      "Fecha Consulta"
+    ];
+
+    const filas = historialDirecciones.map((item) => [
+      item.tipo_documento || "",
+      item.numero_documento || "",
+      item.nombres || "",
+      item.apellidos || "",
+      item.celular || "",
+      item.correo || "",
+      item.direccion || "",
+      item.municio_departamento || "",
+      item.telefono || "",
+      item.tipo_direccion || "",
+      item.fecha_consulta_direccion
+        ? new Date(item.fecha_consulta_direccion).toLocaleString("es-CO", { timeZone: "America/Bogota" })
+        : ""
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([columnas, ...filas]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Historial Direcciones");
+
+    // Ajustar ancho de columnas
+    ws["!cols"] = columnas.map(() => ({ wch: 22 }));
+
+    XLSX.writeFile(wb, `historial_direcciones_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success(`Excel generado: ${historialDirecciones.length} registro(s)`);
   };
 
   // Cargar documentos de un grupo específico por tipo (sin mezclar)
@@ -157,7 +200,7 @@ export default function PersonasDirecciones() {
       setError("");
       setResultado(null);
 
-      const response = await fetch("http://84.247.165.214:3000/api/personas/direcciones/consultar-direcciones-pn-batch", {
+      const response = await fetch(`${API_BASE}/personas/direcciones/consultar-direcciones-pn-batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -294,13 +337,6 @@ export default function PersonasDirecciones() {
   const personasPaginaDetalle = grupoActivo
     ? grupoActivo.personas.slice((paginaDetalle - 1) * ITEMS_POR_PAGINA, paginaDetalle * ITEMS_POR_PAGINA)
     : [];
-
-  const HIST_ITEMS_PER_SLIDE = 10;
-  const historialSlides = [];
-
-  for (let i = 0; i < historialDirecciones.length; i += HIST_ITEMS_PER_SLIDE) {
-    historialSlides.push(historialDirecciones.slice(i, i + HIST_ITEMS_PER_SLIDE));
-  }
 
   return (
     <div className="min-h-screen p-4 md:p-6 lg:p-8" style={{ backgroundColor: COLORS.pageBg }}>
@@ -831,7 +867,7 @@ export default function PersonasDirecciones() {
           </div>
         )}
 
-        {/* Historial direcciones */}
+        {/* Historial direcciones — solo exportable */}
         <section
           className="rounded-3xl p-6 shadow-sm"
           style={{
@@ -840,78 +876,38 @@ export default function PersonasDirecciones() {
           }}
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
-              Historial direcciones
-            </h3>
+            <div>
+              <h3 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
+                Historial direcciones
+              </h3>
+              <p className="text-sm mt-1" style={{ color: COLORS.textSecondary }}>
+                {historialDirecciones.length > 0
+                  ? `${historialDirecciones.length} registro(s) disponibles`
+                  : "No hay datos cargados"}
+              </p>
+            </div>
 
-            <button
-              onClick={cargarHistorialDirecciones}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm"
-              style={{ borderColor: COLORS.border, color: COLORS.textSecondary }}
-            >
-              <RefreshCw size={14} />
-              Recargar
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={cargarHistorialDirecciones}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm"
+                style={{ borderColor: COLORS.border, color: COLORS.textSecondary }}
+              >
+                <RefreshCw size={14} />
+                Recargar
+              </button>
+
+              <button
+                onClick={exportarExcel}
+                disabled={historialDirecciones.length === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+                style={{ backgroundColor: COLORS.primary }}
+              >
+                <Download size={14} />
+                Exportar Excel
+              </button>
+            </div>
           </div>
-
-          {historialDirecciones.length === 0 ? (
-            <p className="text-sm" style={{ color: COLORS.textSecondary }}>
-              No hay historial de direcciones todavía.
-            </p>
-          ) : (
-            <Swiper
-              modules={[Pagination, Navigation]}
-              pagination={{ clickable: true }}
-              navigation
-              spaceBetween={20}
-              slidesPerView={1}
-              className="pb-10"
-            >
-              {historialSlides.map((slideItems, slideIndex) => (
-                <SwiperSlide key={`hist-slide-${slideIndex}`}>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ backgroundColor: COLORS.pageBg }}>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Tipo Doc</th>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Documento</th>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Nombres / Apellidos</th>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Celular / Correo</th>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Dirección</th>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Municipio</th>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Teléfono</th>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Tipo Dir</th>
-                          <th className="py-3 px-3 text-left font-semibold" style={{ color: COLORS.textSecondary }}>Fecha consulta</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {slideItems.map((item, index) => (
-                          <tr key={`${item.numero_documento}-${slideIndex}-${index}`} className="border-t" style={{ borderColor: COLORS.border }}>
-                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.tipo_documento || "—"}</td>
-                            <td className="py-3 px-3 font-mono font-semibold" style={{ color: COLORS.textPrimary }}>{item.numero_documento || "—"}</td>
-                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{`${item.nombres || ""} ${item.apellidos || ""}`.trim() || "—"}</td>
-                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>
-                              <div>{item.celular || "—"}</div>
-                              <div className="text-xs">{item.correo || "—"}</div>
-                            </td>
-                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.direccion || "—"}</td>
-                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.municio_departamento || "—"}</td>
-                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.telefono || "—"}</td>
-                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>{item.tipo_direccion || "—"}</td>
-                            <td className="py-3 px-3" style={{ color: COLORS.textSecondary }}>
-                              {item.fecha_consulta_direccion
-                                ? new Date(item.fecha_consulta_direccion).toLocaleString("es-CO", { timeZone: "America/Bogota" })
-                                : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </SwiperSlide>
-              ))}
-            </Swiper>
-          )}
         </section>
 
       </div>

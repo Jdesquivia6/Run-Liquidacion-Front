@@ -1,6 +1,7 @@
 import axios from "axios";
+import { API_BASE as CFG } from "../config";
 
-const API_BASE = "http://84.247.165.214:3000/api/users";
+const API_BASE = `${CFG}/users`;
 
 function getToken() {
   return localStorage.getItem("token");

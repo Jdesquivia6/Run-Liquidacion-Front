@@ -43,8 +43,10 @@ const COLORS = {
 function getFechaColombia(daysAtras = 0) {
   const fecha = new Date();
   fecha.setDate(fecha.getDate() - daysAtras);
-  return fecha.toLocaleDateString("es-CO", { timeZone: "America/Bogota" }).split('/').reverse().join('-');
+  return fecha.toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 }
+
+const today = getFechaColombia(0);
 
 export default function Dashboard() {
   // Helper para calcular fechas (en hora Colombia)
@@ -240,6 +242,7 @@ export default function Dashboard() {
                 </label>
                 <input
                   type="date"
+                  max={today}
                   value={fechaInicio}
                   onChange={(e) => setFechaInicio(e.target.value)}
                   className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2"
@@ -257,6 +260,7 @@ export default function Dashboard() {
                 </label>
                 <input
                   type="date"
+                  max={today}
                   value={fechaFin}
                   onChange={(e) => setFechaFin(e.target.value)}
                   className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm transition-all focus:outline-none focus:ring-2"

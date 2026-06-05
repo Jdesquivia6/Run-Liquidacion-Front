@@ -23,7 +23,7 @@ function formatFechaColombia(fecha) {
 
 // Obtener fecha actual en Colombia (para默认值 del datepicker)
 function getTodayColombia() {
-  return new Date().toLocaleDateString("es-CO", { timeZone: "America/Bogota" }).split('/').reverse().join('-');
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 }
 
 export default function PendingPlatesPanel({
@@ -42,7 +42,7 @@ export default function PendingPlatesPanel({
 
   const esModuloDatosVehiculo = modulo === "datos-vehiculo";
 
-  const buscarPlacas = async () => {
+  const buscarPlacas = async (autoSelect = false) => {
     try {
       setLoading(true);
 
@@ -57,20 +57,21 @@ export default function PendingPlatesPanel({
       const data = resp.results || [];
 
       setPlacas(data);
-      setSeleccionadas(data.map((item) => item.placa));
+      setSeleccionadas(autoSelect ? data.map((item) => item.placa) : []);
 
       toast.success(
         `Se cargaron ${data.length} placa(s). Máximo ${QUERY_LIMIT} por lote.`
       );
     } catch (error) {
       toast.error(error.response?.data?.error || "Error cargando placas");
+      setSeleccionadas([]);
     } finally {
       setLoading(false);
     }
   };
 
   const refrescarPendientes = async () => {
-    await buscarPlacas();
+    await buscarPlacas(false);
 
     if (onAfterBatchCompleted) {
       onAfterBatchCompleted();
@@ -108,6 +109,9 @@ export default function PendingPlatesPanel({
       placas: seleccionadas,
       refrescarPendientes
     });
+
+    // Limpiar selección inmediatamente al enviar
+    setSeleccionadas([]);
   };
 
   const totalPaginas = Math.ceil(placas.length / PAGE_SIZE);
@@ -155,6 +159,7 @@ export default function PendingPlatesPanel({
           </label>
           <input
             type="date"
+            max={today}
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
             className="mt-2 w-full rounded-2xl border border-[#cbd5e1] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00ABE4] focus:border-[#00ABE4] transition-colors"
@@ -167,6 +172,7 @@ export default function PendingPlatesPanel({
           </label>
           <input
             type="date"
+            max={today}
             value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
             className="mt-2 w-full rounded-2xl border border-[#cbd5e1] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00ABE4] focus:border-[#00ABE4] transition-colors"

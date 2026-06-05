@@ -282,7 +282,7 @@ export default function ConsultaPlaca() {
 
             <motion.button
               onClick={handleConsultar}
-              disabled={loading}
+              disabled={true}
               whileHover={{ scale: loading ? 1 : 1.03 }}
               whileTap={{ scale: loading ? 1 : 0.98 }}
               className="

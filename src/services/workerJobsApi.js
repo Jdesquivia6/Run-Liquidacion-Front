@@ -1,6 +1,5 @@
 import axios from "axios";
-
-const API_BASE = "http://84.247.165.214:3000/api";
+import { API_BASE } from "../config";
 
 // Cliente con interceptor de token (igual que axiosClient)
 const api = axios.create({

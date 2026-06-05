@@ -1,7 +1,7 @@
 import axios from "axios";
 import axiosClient from "./axiosClient";
 
-const API_BASE = "http://84.247.165.214:3000/api";
+import { API_BASE } from "../config";
 
 export async function consultarPlacaBatch(placas) {
   const response = await axios.post(`${API_BASE}/vehiculos/procesar-batch`, {

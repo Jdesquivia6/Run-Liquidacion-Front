@@ -1,6 +1,7 @@
 import axios from "axios";
+import { API_BASE as CFG } from "../config";
 
-const API = "http://84.247.165.214:3000/api/liquidacion";
+const API = `${CFG}/liquidacion`;
 
 export const API_BASE = API;
 

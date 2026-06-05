@@ -262,7 +262,7 @@ export default function DatosVehiculo() {
 
           <button
             onClick={handleConsultar}
-            disabled={loading}
+            disabled={true}
             className="
               w-full xl:w-60 h-12 px-6 rounded-2xl shadow-md font-semibold
               transition-all duration-200 flex items-center justify-center gap-2
