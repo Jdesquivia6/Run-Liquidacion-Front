@@ -93,7 +93,7 @@ export default function PersonasDirecciones() {
 
   const cargarHistorialDirecciones = async () => {
     try {
-      const response = await fetch(`${API_BASE}/personas/direcciones/historial-direcciones?limit=100`);
+      const response = await fetch(`${API_BASE}/personas/direcciones/historial-direcciones`);
       const data = await response.json();
 
       if (!response.ok) {

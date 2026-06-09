@@ -138,8 +138,29 @@ export default function Historial() {
   const exitosas = registros.filter((r) => r.estado === true).length;
   const fallidas = registros.filter((r) => r.estado !== true).length;
 
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
     try {
+      // Pedir todos los registros (sin paginación) para el Excel
+      const params = new URLSearchParams();
+      if (moduloActivo !== "todos") params.set("modulo", moduloActivo);
+      if (fechaInicio) params.set("fechaInicio", fechaInicio);
+      if (fechaFin) params.set("fechaFin", fechaFin);
+      params.set("limite", "100000"); // Traer todo
+
+      const response = await fetch(`${API_BASE}/historial?${params.toString()}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Error cargando datos para Excel");
+      }
+
+      const todosRegistros = data.results || [];
+
+      if (todosRegistros.length === 0) {
+        toast.error("No hay datos para exportar");
+        return;
+      }
+
       const headers = [
         "Fecha", "Placa / Documento", "Módulo", "Estado", "Detalle",
         "Propietario", "Tipo Documento", "Número Documento",
@@ -150,7 +171,7 @@ export default function Historial() {
 
       const wsData = [headers];
 
-      for (const r of registros) {
+      for (const r of todosRegistros) {
         wsData.push([
           formatFechaColombia(r.fecha),
           r.placa_documento || "—",
@@ -188,7 +209,7 @@ export default function Historial() {
 
       XLSX.utils.book_append_sheet(wb, ws, "Historial");
       XLSX.writeFile(wb, `historial_${new Date().toISOString().split("T")[0]}.xlsx`);
-      toast.success("Excel exportado correctamente");
+      toast.success(`Excel exportado: ${todosRegistros.length} registro(s)`);
     } catch (err) {
       toast.error("Error exportando Excel: " + err.message);
     }
