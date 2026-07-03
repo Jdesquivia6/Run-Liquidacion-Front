@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { motion } from "framer-motion";
+import RuntSessionStatus from "./RuntSessionStatus";
 
 const menu = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
@@ -56,8 +57,13 @@ export default function Sidebar({ activeModule, onChangeModule, sidebarOpen }) {
       {/* Separator */}
       <div className="mx-5 border-t border-slate-100" />
 
+      {/* Session Status */}
+      <div className="px-4 pt-4">
+        <RuntSessionStatus compact />
+      </div>
+
       {/* Navigation */}
-      <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100vh-130px)]">
+      <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100vh-210px)]">
         {visibleMenu.map((item) => {
           const Icon = item.icon;
           const active = activeModule === item.id;

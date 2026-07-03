@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import toast from "react-hot-toast";
 import { Clock3, ShieldCheck, AlertTriangle, RefreshCcw } from "lucide-react";
 import {
@@ -9,6 +9,7 @@ import {
 export default function RuntSessionStatus({ compact = false }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(false);
+  const alertShownRef = useRef(false);
 
   const cargarEstado = async () => {
     try {
@@ -41,6 +42,19 @@ export default function RuntSessionStatus({ compact = false }) {
   const activa = session?.activa;
   const minutos = session?.minutosRestantes || 0;
   const capacidad = session?.capacidadSegura || 0;
+
+  useEffect(() => {
+    if (activa && minutos <= 5 && minutos > 0 && !alertShownRef.current) {
+      alertShownRef.current = true;
+      toast.error(
+        `⚠️ La sesión RUNT expira en ${minutos} minuto${minutos !== 1 ? "s" : ""}. Renueva ahora.`,
+        { duration: 8000 }
+      );
+    }
+    if (minutos > 5) {
+      alertShownRef.current = false;
+    }
+  }, [activa, minutos]);
 
   const statusStyle = !activa
     ? {
