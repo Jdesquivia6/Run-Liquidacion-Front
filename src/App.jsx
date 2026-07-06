@@ -15,6 +15,8 @@ import PersonasDirecciones from "./pages/PersonasDirecciones";
 import Historial from "./pages/Historial";
 import LiquidarRunt from "./pages/LiquidarRunt";
 import Usuarios from "./pages/Usuarios";
+import ConfiguracionImpresora from "./pages/ConfiguracionImpresora";
+import UbicabilidadPersonas from "./pages/UbicabilidadPersonas";
 import RecuperarPassword from "./pages/RecuperarPassword";
 import CambiarPassword from "./pages/CambiarPassword";
 
@@ -48,6 +50,8 @@ function App() {
             <Route path="historial" element={<Historial />} />
             <Route path="liquidacion" element={<LiquidarRunt />} />
             <Route path="usuarios" element={<Usuarios />} />
+            <Route path="configuracion/impresora" element={<ConfiguracionImpresora />} />
+            <Route path="ubicabilidad-personas" element={<UbicabilidadPersonas />} />
           </Route>
 
           {/* Rutas directas para cada módulo (sin /dashboard/) */}
@@ -115,6 +119,28 @@ function App() {
             }
           >
             <Route index element={<Usuarios />} />
+          </Route>
+
+          <Route
+            path="/configuracion/impresora"
+            element={
+              <ProtectedRoute module="configuracion">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ConfiguracionImpresora />} />
+          </Route>
+
+          <Route
+            path="/ubicabilidad-personas"
+            element={
+              <ProtectedRoute module="ubicabilidad-personas">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<UbicabilidadPersonas />} />
           </Route>
 
           {/* Cambiar password protegido */}

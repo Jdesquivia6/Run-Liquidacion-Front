@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-
 import {
   listarUsuarios,
   listarModulos,
@@ -8,8 +7,9 @@ import {
   actualizarUsuario,
   cambiarPassword
 } from "../services/usersApi";
-
 import UserModal from "../components/UserModal";
+import PageHeroHeader from "../components/PageHeroHeader";
+import { Users, UserPlus } from "lucide-react";
 
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
@@ -72,44 +72,27 @@ export default function Usuarios() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header de sección */}
-      <section className="bg-white rounded-3xl shadow-sm p-6 animate-fade-in">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold" style={{ color: "#1e293b" }}>
-              Gestión de usuarios
-            </h2>
-
-            <p className="text-sm mt-1" style={{ color: "#64748b" }}>
-              Administra operarios, administradores y permisos.
-            </p>
-          </div>
-
+    <div className="space-y-5">
+      {/* Header hero */}
+      <PageHeroHeader
+        label="Administración"
+        labelIcon={Users}
+        title="Gestión de usuarios"
+        description="Administra operarios, administradores y permisos."
+        icon={Users}
+        actionButton={
           <button
             onClick={() => {
               setEditingUser(null);
               setOpenModal(true);
             }}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl text-white font-medium transition-all duration-200 hover:scale-105"
-            style={{ backgroundColor: "#00ABE4" }}
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-[#00ABE4] font-semibold shadow-md transition-all duration-200 hover:bg-slate-50 hover:scale-105 active:scale-95"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <UserPlus className="w-5 h-5" />
             Crear usuario
           </button>
-        </div>
-      </section>
+        }
+      />
 
       {/* Tabla de usuarios */}
       <section

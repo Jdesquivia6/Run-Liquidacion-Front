@@ -59,3 +59,8 @@ export async function consultarLiquidacionBatchSecuencial(items, callbacks = {})
 
   onComplete?.({ total: items.length, exitosos, fallidos });
 }
+
+export async function imprimirPdfs(fileNames) {
+  const response = await axios.post(`${API}/imprimir-pdfs`, { fileNames });
+  return response.data;
+}

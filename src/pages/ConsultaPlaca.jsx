@@ -5,14 +5,16 @@ import {
   listarHistorialVehiculos
 } from "../services/vehicleQueryApi";
 import { crearJob } from "../services/workerJobsApi";
-import { obtenerEstadoSesionRunt } from "../services/sessionRunt"
+import { obtenerEstadoSesionRunt } from "../services/sessionRunt";
+import { cargarPlacasPorArchivo } from "../services/placasApi";
 import PendingPlatesPanel from "../components/PendingPlatesPanel";
 import DetailModal from "../components/DetailModal";
 import QueryHistoryTable from "../components/QueryHistoryTable";
 import toast from "react-hot-toast";
 import QueryResultsSwiper from "../components/QueryResultsSwiper";
 import JobProgress from "../components/JobProgress";
-import { Search, AlertCircle, Loader2, Play, Briefcase } from "lucide-react";
+import PageHeroHeader from "../components/PageHeroHeader";
+import { Search, AlertCircle, Loader2, Briefcase, Calendar, ClipboardList, Upload, FileText, X } from "lucide-react";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -46,6 +48,8 @@ export default function ConsultaPlaca() {
   const [detalle, setDetalle] = useState(null);
   const [refrescarPendientesActual, setRefrescarPendientesActual] = useState(null);
   const [jobActual, setJobActual] = useState(null);
+  const [archivoPlacas, setArchivoPlacas] = useState(null);
+  const [loadingFile, setLoadingFile] = useState(false);
 
   const procesarPlacas = () => {
     return placas
@@ -98,6 +102,45 @@ export default function ConsultaPlaca() {
   // Función para recargar historial
   const recargarHistorial = () => {
     cargarHistorial();
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const validTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv"
+    ];
+    if (!validTypes.includes(file.type) && !file.name.endsWith(".xlsx") && !file.name.endsWith(".xls") && !file.name.endsWith(".csv")) {
+      toast.error("Solo se permiten archivos Excel (.xlsx, .xls) o CSV (.csv)");
+      return;
+    }
+
+    setLoadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append("archivo", file);
+
+      const resp = await cargarPlacasPorArchivo(formData);
+
+      if (resp.ok) {
+        const placasData = resp.data.placas || [];
+        const placasTexto = placasData.map((p) => p.placa).join("\n");
+        setPlacas(placasTexto);
+        setArchivoPlacas(null);
+        toast.success(`${placasData.length} placa(s) cargadas desde archivo`);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        toast.error(resp.error || "Error al procesar archivo");
+      }
+    } catch (err) {
+      toast.error("Error al subir archivo: " + err.message);
+    } finally {
+      setLoadingFile(false);
+      e.target.value = "";
+    }
   };
 
   const handleConsultar = async () => {
@@ -194,114 +237,161 @@ export default function ConsultaPlaca() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="space-y-6"
+        className="space-y-5"
       >
+        {/* Hero header */}
+        <PageHeroHeader
+          label="Consulta de placas"
+          labelIcon={ClipboardList}
+          title="Placas pendientes por fecha"
+          description="Consulta lotes de placas pendientes por rango de fechas y estado para continuar el procesamiento."
+          icon={Calendar}
+          badgeCount={resultados.length}
+          badgeLabel="resultado"
+        />
+
         <PendingPlatesPanel
           modulo="consulta-placa"
           onSendToQuery={cargarPlacasSeleccionadas}
         />
 
+        {/* Tarjeta del formulario */}
         <motion.section
           variants={itemVariants}
-          className="bg-white rounded-3xl shadow-lg p-4 md:p-6"
+          className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6"
         >
-          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
-            <div className="max-w-2xl">
-              <h2 className="text-2xl font-bold text-[#1e293b]">
-                Consulta de placa
-              </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-[#1e293b]">
+              Buscar placas pendientes
+            </h3>
+            <span className="text-xs text-[#64748b]">
+              Máximo 100 placas por lote
+            </span>
+          </div>
 
-              <p className="text-sm text-[#64748b] mt-2">
-                Consulta propietarios, SOAT y tecnomecánica desde el módulo principal.
-                Puedes ingresar una o varias placas separadas por coma, espacio o salto de línea.
-              </p>
-            </div>
+          <p className="text-xs text-[#64748b] mb-4">
+            El sistema traerá máximo 100 placas pendientes por lote. Cuando finalice la consulta,
+            podrás volver a cargar las siguientes pendientes del mismo rango.
+          </p>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full xl:w-auto">
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                className="bg-[#00ABE4]/10 rounded-2xl p-4"
-              >
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              className="bg-[#00ABE4]/10 rounded-xl p-3 text-center"
+            >
                 <p className="text-xs text-[#00ABE4] font-medium">Total</p>
-                <p className="text-2xl font-bold text-[#00ABE4]">{resultados.length}</p>
+                <p className="text-xl font-bold text-[#00ABE4]">{resultados.length}</p>
               </motion.div>
 
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className="bg-emerald-50 rounded-2xl p-4"
+                className="bg-emerald-50 rounded-xl p-3 text-center"
               >
                 <p className="text-xs text-emerald-600 font-medium">Exitosas</p>
-                <p className="text-2xl font-bold text-emerald-700">
+                <p className="text-xl font-bold text-emerald-700">
                   {resultados.filter((r) => r.ok).length}
                 </p>
               </motion.div>
 
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                className="bg-red-50 rounded-2xl p-4"
+                className="bg-red-50 rounded-xl p-3 text-center"
               >
                 <p className="text-xs text-red-600 font-medium">Fallidas</p>
-                <p className="text-2xl font-bold text-red-700">
+                <p className="text-xl font-bold text-red-700">
                   {resultados.filter((r) => !r.ok).length}
                 </p>
               </motion.div>
-
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                className="bg-amber-50 rounded-2xl p-4"
-              >
-                <p className="text-xs text-amber-600 font-medium">Proceso</p>
-                <p className="text-2xl font-bold text-amber-700">
-                  {loading ? "..." : "0"}
-                </p>
-              </motion.div>
             </div>
-          </div>
 
-          <div className="mt-6 grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-4 items-end">
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px_auto_auto] gap-3 items-end">
             <div>
-              <label className="text-sm font-semibold text-[#1e293b]">
+              <label className="text-xs font-semibold text-[#64748b] mb-1.5 block">
                 Placas a consultar
               </label>
-
               <textarea
                 value={placas}
                 onChange={(e) => setPlacas(e.target.value)}
                 placeholder="Ejemplo: ABC123, EUP243, QHD596"
                 disabled={loading}
                 className="
-                  mt-2 w-full min-h-32 rounded-2xl border-2 border-slate-200
+                  w-full min-h-28 rounded-xl border-2 border-slate-200
                   px-4 py-3 text-sm resize-none text-[#1e293b]
-                  placeholder:text-[#64748b]/60 placeholder:text-sm
-                  focus:outline-none focus:border-[#00ABE4] focus:ring-4 focus:ring-[#00ABE4]/20
+                  placeholder:text-[#94a3b8] placeholder:text-xs
+                  focus:outline-none focus:border-[#00ABE4] focus:ring-4 focus:ring-[#00ABE4]/10
                   disabled:bg-slate-50 disabled:cursor-not-allowed
                   transition-all duration-200
                 "
               />
             </div>
 
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-[#64748b] block">
+                O cargar desde archivo
+              </label>
+              <label
+                className={`
+                  h-28 rounded-xl border-2 border-dashed cursor-pointer
+                  flex flex-col items-center justify-center gap-1
+                  transition-all duration-200
+                  ${loadingFile
+                    ? "bg-slate-50 border-slate-200 cursor-not-allowed"
+                    : archivoPlacas
+                      ? "bg-[#00ABE4]/10 border-[#00ABE4] cursor-pointer hover:bg-[#00ABE4]/20"
+                      : "bg-slate-50 border-slate-300 hover:border-[#00ABE4] hover:bg-[#00ABE4]/5"
+                  }
+                `}
+              >
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileUpload}
+                  disabled={loadingFile}
+                  className="hidden"
+                />
+                {loadingFile ? (
+                  <>
+                    <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+                    <span className="text-xs text-slate-500">Procesando...</span>
+                  </>
+                ) : archivoPlacas ? (
+                  <>
+                    <FileText className="w-5 h-5 text-[#00ABE4]" />
+                    <span className="text-xs text-[#00ABE4] font-medium truncate max-w-36">
+                      {archivoPlacas.name}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-5 h-5 text-slate-400" />
+                    <span className="text-xs text-slate-500">Excel o CSV</span>
+                  </>
+                )}
+              </label>
+            </div>
+
             <motion.button
               onClick={handleConsultar}
-              disabled={true}
-              whileHover={{ scale: loading ? 1 : 1.03 }}
+              disabled={loading}
+              whileHover={{ scale: loading ? 1 : 1.02 }}
               whileTap={{ scale: loading ? 1 : 0.98 }}
               className="
-                w-full xl:w-52 h-12
-                bg-gradient-to-r from-[#00ABE4] to-[#0095CC] hover:from-[#0095CC] hover:to-[#007AB8]
-                disabled:from-slate-300 disabled:to-slate-300
-                text-white px-6 py-3 rounded-2xl shadow-lg shadow-[#00ABE4]/30
-                transition-all duration-200 font-semibold flex items-center justify-center gap-2
+                h-11 px-5 rounded-xl
+                bg-[#00ABE4] hover:bg-[#0095C5]
+                disabled:bg-slate-300
+                text-white shadow-md hover:shadow-lg
+                transition-all duration-200 font-semibold flex items-center justify-center gap-2 text-sm
               "
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Consultando...</span>
                 </>
               ) : (
                 <>
-                  <Search className="w-5 h-5" />
-                  <span>Consultar placa</span>
+                  <Search className="w-4 h-4" />
+                  <span>Buscar lote</span>
                 </>
               )}
             </motion.button>
@@ -309,24 +399,24 @@ export default function ConsultaPlaca() {
             <motion.button
               onClick={handleCrearTrabajo}
               disabled={loadingJob}
-              whileHover={{ scale: loadingJob ? 1 : 1.03 }}
+              whileHover={{ scale: loadingJob ? 1 : 1.02 }}
               whileTap={{ scale: loadingJob ? 1 : 0.98 }}
               className="
-                w-full xl:w-52 h-12
-                bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700
-                disabled:from-slate-300 disabled:to-slate-300
-                text-white px-6 py-3 rounded-2xl shadow-lg shadow-emerald-500/30
-                transition-all duration-200 font-semibold flex items-center justify-center gap-2
+                h-11 px-5 rounded-xl
+                bg-emerald-500 hover:bg-emerald-600
+                disabled:bg-slate-300
+                text-white shadow-md hover:shadow-lg
+                transition-all duration-200 font-semibold flex items-center justify-center gap-2 text-sm
               "
             >
               {loadingJob ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Creando...</span>
                 </>
               ) : (
                 <>
-                  <Briefcase className="w-5 h-5" />
+                  <Briefcase className="w-4 h-4" />
                   <span>Crear trabajo</span>
                 </>
               )}
@@ -337,10 +427,10 @@ export default function ConsultaPlaca() {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-4 bg-red-50/80 text-red-700 rounded-2xl px-4 py-3 text-sm border border-red-100/50 flex items-center gap-2"
+              className="mt-4 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm flex items-center gap-2"
             >
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {error}
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-500" />
+              <span className="text-red-700">{error}</span>
             </motion.div>
           )}
         </motion.section>

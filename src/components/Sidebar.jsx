@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   LayoutDashboard,
   Search,
@@ -6,7 +7,10 @@ import {
   ReceiptText,
   Settings,
   MapPin,
-  Users
+  Users,
+  Printer,
+  ChevronDown,
+  UserSearch
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { motion } from "framer-motion";
@@ -17,15 +21,26 @@ const menu = [
   { id: "consulta-placa", label: "Consulta de placa", icon: Search, module: "consulta-placa" },
   { id: "datos-vehiculo", label: "Datos vehículo", icon: Car, module: "datos-vehiculo" },
   { id: "personas-direcciones", label: "Personas - Direcciones", icon: MapPin, module: "personas-direcciones" },
+  { id: "ubicabilidad-personas", label: "Ubicabilidad Personas", icon: UserSearch, module: "ubicabilidad-personas" },
   { id: "historial", label: "Historial", icon: ClipboardList, module: "historial" },
-  { id: "liquidacion", label: "Liquidaciones RUNT", icon: ReceiptText, module: "liquidacion" },
-  { id: "configuracion", label: "Configuración", icon: Settings, module: "configuracion" }
+  { id: "liquidacion", label: "Liquidaciones RUNT", icon: ReceiptText, module: "liquidacion" }
+];
+
+const configMenu = [
+  { id: "usuarios", label: "Gestión de usuarios", icon: Users, module: "configuracion" },
+  { id: "configuracion-impresora", label: "Configurar impresora", icon: Printer, module: "configuracion" }
 ];
 
 export default function Sidebar({ activeModule, onChangeModule, sidebarOpen }) {
   const { hasModule, user } = useAuth();
+  const [configOpen, setConfigOpen] = useState(false);
 
   const visibleMenu = menu.filter((item) => hasModule(item.module));
+  const visibleConfigMenu = configMenu.filter((item) => hasModule(item.module));
+  const showConfig = visibleConfigMenu.length > 0;
+  const isConfigActive = activeModule === "usuarios" || activeModule === "configuracion-impresora";
+
+  const isInConfigSection = activeModule === "usuarios" || activeModule === "configuracion-impresora";
 
   return (
     <aside
@@ -81,7 +96,6 @@ export default function Sidebar({ activeModule, onChangeModule, sidebarOpen }) {
                   : "text-slate-500 hover:bg-[#E9F1FA] hover:text-slate-700"}
               `}
             >
-              {/* Active indicator - left bar */}
               {active && (
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full" />
               )}
@@ -89,13 +103,66 @@ export default function Sidebar({ activeModule, onChangeModule, sidebarOpen }) {
               <Icon size={20} />
               <span className="truncate">{item.label}</span>
 
-              {/* Active indicator - dot */}
               {active && (
                 <span className="ml-auto w-2 h-2 rounded-full bg-white" />
               )}
             </motion.button>
           );
         })}
+
+        {/* Configuración section */}
+        {showConfig && (
+          <div className="pt-3 mt-2 border-t border-slate-100">
+            <button
+              onClick={() => setConfigOpen(!configOpen)}
+              className={`
+                w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all relative
+                ${isConfigActive
+                  ? "bg-gradient-to-r from-[#00ABE4] to-[#0095C5] text-white shadow-btn"
+                  : "text-slate-500 hover:bg-[#E9F1FA] hover:text-slate-700"}
+              `}
+            >
+              <Settings size={20} />
+              <span className="truncate flex-1 text-left">Configuración</span>
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${configOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {(isConfigActive || configOpen) && (
+              <div className="ml-3 mt-1 space-y-0.5">
+                {visibleConfigMenu.map((item) => {
+                  const Icon = item.icon;
+                  const active = activeModule === item.id;
+
+                  return (
+                    <motion.button
+                      key={item.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      onClick={() => onChangeModule(item.id)}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`
+                        w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all relative
+                        ${active
+                          ? "bg-[#00ABE4]/10 text-[#00ABE4] font-semibold"
+                          : "text-slate-400 hover:bg-[#E9F1FA] hover:text-slate-600"}
+                      `}
+                    >
+                      <Icon size={16} />
+                      <span className="truncate">{item.label}</span>
+                      {active && (
+                        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#00ABE4]" />
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
     </aside>
   );
