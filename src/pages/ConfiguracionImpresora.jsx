@@ -127,6 +127,8 @@ export default function ConfiguracionImpresora() {
                 onClick={() => setAutoPrint(!autoPrint)}
                 className={`
                   relative w-12 h-7 rounded-full transition-colors duration-200
+                  focus:outline-none focus:ring-0 select-none
+                  [webkit-tap-highlight-color:transparent]
                   ${autoPrint ? "bg-[#00ABE4]" : "bg-slate-300"}
                 `}
               >

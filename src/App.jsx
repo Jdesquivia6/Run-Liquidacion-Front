@@ -102,7 +102,7 @@ function App() {
           <Route
             path="/liquidacion"
             element={
-              <ProtectedRoute module="liquidacion">
+              <ProtectedRoute module="liquidaciones">
                 <DashboardLayout />
               </ProtectedRoute>
             }

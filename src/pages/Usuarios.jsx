@@ -5,19 +5,26 @@ import {
   listarModulos,
   crearUsuario,
   actualizarUsuario,
-  cambiarPassword
+  cambiarPassword,
+  eliminarUsuario
 } from "../services/usersApi";
 import UserModal from "../components/UserModal";
+import ConfirmModal from "../components/ConfirmModal";
 import PageHeroHeader from "../components/PageHeroHeader";
-import { Users, UserPlus } from "lucide-react";
+import { Users, UserPlus, Trash2 } from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
 
 export default function Usuarios() {
+  const { user: authUser } = useAuth();
   const [usuarios, setUsuarios] = useState([]);
   const [modulos, setModulos] = useState([]);
 
   const [openModal, setOpenModal] = useState(false);
-
   const [editingUser, setEditingUser] = useState(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const cargar = async () => {
     try {
@@ -68,6 +75,27 @@ export default function Usuarios() {
         error.response?.data?.error ||
         "Error guardando usuario"
       );
+    }
+  };
+
+  const handleEliminar = (user) => {
+    setUserToDelete(user);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    setDeleting(true);
+    try {
+      await eliminarUsuario(userToDelete.id_usuario);
+      toast.success("Usuario eliminado");
+      setConfirmOpen(false);
+      setUserToDelete(null);
+      await cargar();
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Error al eliminar usuario");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -207,6 +235,15 @@ export default function Usuarios() {
                   >
                     Editar
                   </button>
+
+                  {authUser?.rol === "administrador" && (
+                    <button
+                      onClick={() => handleEliminar(user)}
+                      className="ml-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105 bg-red-50 text-red-600 hover:bg-red-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -220,6 +257,19 @@ export default function Usuarios() {
         onSave={handleSave}
         modulosDisponibles={modulos}
         initialData={editingUser}
+      />
+
+      <ConfirmModal
+        open={confirmOpen}
+        title="Eliminar usuario"
+        message={`¿Estás seguro de eliminar al usuario "${userToDelete?.nombre || userToDelete?.email}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setConfirmOpen(false);
+          setUserToDelete(null);
+        }}
+        loading={deleting}
       />
     </div>
   );

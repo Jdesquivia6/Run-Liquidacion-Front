@@ -67,3 +67,16 @@ export async function cambiarPassword(id, password) {
 
   return response.data;
 }
+
+export async function eliminarUsuario(id) {
+  const response = await axios.delete(
+    `${API_BASE}/${id}`,
+    {
+      headers: {
+        Authorization: `Bearer ${getToken()}`
+      }
+    }
+  );
+
+  return response.data;
+}

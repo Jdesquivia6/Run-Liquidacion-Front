@@ -23,7 +23,7 @@ const menu = [
   { id: "personas-direcciones", label: "Personas - Direcciones", icon: MapPin, module: "personas-direcciones" },
   { id: "ubicabilidad-personas", label: "Ubicabilidad Personas", icon: UserSearch, module: "ubicabilidad-personas" },
   { id: "historial", label: "Historial", icon: ClipboardList, module: "historial" },
-  { id: "liquidacion", label: "Liquidaciones RUNT", icon: ReceiptText, module: "liquidacion" }
+  { id: "liquidacion", label: "Liquidaciones RUNT", icon: ReceiptText, module: "liquidaciones" }
 ];
 
 const configMenu = [
