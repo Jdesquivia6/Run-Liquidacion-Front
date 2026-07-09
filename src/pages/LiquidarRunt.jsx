@@ -2,7 +2,9 @@ import { useState } from "react";
 import Header from "../components/Header";
 import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
-import { consultarLiquidacionBatchSecuencial, imprimirPdfs, API_BASE } from "../services/liquidacionApi";
+import { imprimirPdfs, API_BASE } from "../services/liquidacionApi";
+import { crearJob, obtenerDetalleJob } from "../services/workerJobsApi";
+import JobProgress from "../components/JobProgress";
 import { v4 as uuidv4 } from "uuid";
 import {
   Loader2, FileText, CheckCircle2, AlertCircle,
@@ -510,6 +512,7 @@ export default function LiquidarRunt() {
   const [progreso, setProgreso] = useState({ actual: 0, total: 0 });
   const [ultimaPlaca, setUltimaPlaca] = useState("");
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [jobActual, setJobActual] = useState(null);
 
   const totalTramites = carrito.reduce((sum, item) => sum + item.tramites.length, 0);
 
@@ -662,43 +665,55 @@ export default function LiquidarRunt() {
         fechaLiquidacion: new Date().toISOString().split("T")[0]
       }));
 
-      const resultadosArr = [];
+      const resp = await crearJob("liquidaciones", items);
 
-      await consultarLiquidacionBatchSecuencial(items, {
-        onResult: (data) => {
-          const row = {
-            index: data.index,
-            placa: data.placa || "—",
-            ok: data.ok || false,
-            data: data.data || null,
-            error: data.error || null,
-            tramites: data.tramites || []
-          };
-
-          resultadosArr.push(row);
-          setResultados([...resultadosArr]);
-          setProgreso(prev => ({ ...prev, actual: resultadosArr.length }));
-
-          if (row.ok && row.data?.descarga?.fileName) {
-            abrirPDF(row.data.descarga.fileName);
-          }
-        },
-
-        onComplete: (data) => {
-          setProgreso({ actual: data.total, total: data.total });
-
-          if (data.fallidos === 0) {
-            toast.success(`${data.exitosos} liquidación(es) generada(s) exitosamente`);
-          } else {
-            toast.success(`${data.exitosos} exitosas, ${data.fallidos} fallidas`);
-          }
-        }
-      });
-
+      if (resp.job?.id_job) {
+        setJobActual(resp.job.id_job);
+        toast.success(`Trabajo creado con ${items.length} liquidación(es)`);
+      } else if (resp.jobs?.length > 0) {
+        setJobActual(resp.jobs[0].id_job);
+        toast.success(`Trabajo creado con ${items.length} liquidación(es)`);
+      } else {
+        throw new Error("No se recibió ID del trabajo");
+      }
     } catch (err) {
       const mensaje = err.response?.data?.error || err.message || "Error de conexión";
       toast.error(mensaje);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const procesarJobCompletado = async (jobId) => {
+    try {
+      const detalle = await obtenerDetalleJob(jobId);
+      const items = detalle.items || [];
+
+      const resultadosArr = items.map((item, index) => ({
+        index,
+        placa: item.payload?.placa || "—",
+        ok: item.estado === "exitoso",
+        data: item.resultado?.data || item.resultado || null,
+        error: item.error || item.resultado?.error || null,
+        tramites: item.payload?.tramites || []
+      }));
+
+      setResultados(resultadosArr);
+      setProgreso({ actual: items.length, total: items.length });
+
+      const exitosos = resultadosArr.filter(r => r.ok);
+      const fallidos = resultadosArr.filter(r => !r.ok);
+
+      if (fallidos.length === 0) {
+        toast.success(`${exitosos.length} liquidación(es) generada(s) exitosamente`);
+      } else {
+        toast.success(`${exitosos.length} exitosas, ${fallidos.length} fallidas`);
+      }
+    } catch (err) {
+      toast.error("Error cargando resultados del trabajo");
+      console.error(err);
+    } finally {
+      setJobActual(null);
       setLoading(false);
       setProgreso({ actual: 0, total: 0 });
     }
@@ -742,6 +757,15 @@ export default function LiquidarRunt() {
                 onEliminarTramite={handleEliminarTramiteItem}
                 onLimpiarTodo={handleLimpiarCarrito}
               />
+
+              {jobActual && (
+                <JobProgress
+                  jobId={jobActual}
+                  onClose={() => setJobActual(null)}
+                  onComplete={() => procesarJobCompletado(jobActual)}
+                />
+              )}
+
               <ResultsTable
                 resultados={resultados}
                 onAbrirPDF={abrirPDF}
