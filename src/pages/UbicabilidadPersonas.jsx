@@ -12,6 +12,7 @@ import {
   Loader2, Search, MapPin, Eye, X
 } from "lucide-react";
 import DocumentosSwiper from "../components/DocumentosSwiper";
+import JobProgress from "../components/JobProgress";
 
 export default function UbicabilidadPersonas() {
   const fileInputRef = useRef(null);
@@ -26,6 +27,9 @@ export default function UbicabilidadPersonas() {
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [cargandoResultados, setCargandoResultados] = useState(false);
   const [filtros, setFiltros] = useState({ documento: "", estado: "" });
+
+  // Jobs activos para monitoreo
+  const [jobsActivos, setJobsActivos] = useState([]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -80,8 +84,18 @@ export default function UbicabilidadPersonas() {
         numeroDocumento: d.numero
       }));
       const resp = await crearJob("ubicabilidad-personas", items);
-      if (resp.job?.id_job) {
+
+      const nuevosJobs = [];
+      if (resp.jobs && resp.jobs.length > 0) {
+        nuevosJobs.push(...resp.jobs.map(j => j.id_job));
+        toast.success(resp.message || `Se crearon ${resp.jobs.length} trabajos`);
+      } else if (resp.job?.id_job) {
+        nuevosJobs.push(resp.job.id_job);
         toast.success(`Trabajo creado con ${items.length} documento(s)`);
+      }
+
+      if (nuevosJobs.length > 0) {
+        setJobsActivos(nuevosJobs);
         setArchivo(null);
         setResultadoValidacion(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -180,7 +194,7 @@ export default function UbicabilidadPersonas() {
             className="flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
           >
             {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            {procesando ? "Creando trabajo..." : "Iniciar scraping"}
+            {procesando ? "Creando trabajo..." : "Iniciar Busqueda"}
           </button>
 
           {resultadoValidacion && (
@@ -223,6 +237,31 @@ export default function UbicabilidadPersonas() {
           {resultadoValidacion.documentos?.length > 0 && (
             <DocumentosSwiper documentos={resultadoValidacion.documentos} />
           )}
+        </div>
+      )}
+
+      {/* ── Progreso de trabajos ── */}
+      {jobsActivos.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-5 h-5 text-[#00ABE4] animate-spin" />
+            <h3 className="text-sm font-semibold text-[#1e293b]">
+              Progreso de trabajos ({jobsActivos.length})
+            </h3>
+          </div>
+          {jobsActivos.map((jobId) => (
+            <JobProgress
+              key={jobId}
+              jobId={jobId}
+              onClose={() => {
+                setJobsActivos((prev) => prev.filter((id) => id !== jobId));
+                cargarResultados(1);
+              }}
+              onComplete={() => {
+                cargarResultados(1);
+              }}
+            />
+          ))}
         </div>
       )}
 

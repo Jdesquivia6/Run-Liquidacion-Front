@@ -43,7 +43,7 @@ export default function PersonasDirecciones() {
   const [gruposPendientes, setGruposPendientes] = useState([]);
   const [cargandoPendientes, setCargandoPendientes] = useState(false);
   const [mostrarPendientes, setMostrarPendientes] = useState(false);
-  const [limitPendientes, setLimitPendientes] = useState(100);
+  const [limitPendientes, setLimitPendientes] = useState(90);
   const [grupoDetalleAbierto, setGrupoDetalleAbierto] = useState(null);
   const [paginaDetalle, setPaginaDetalle] = useState(1);
   const ITEMS_POR_PAGINA = 12;

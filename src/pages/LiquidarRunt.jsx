@@ -17,7 +17,7 @@ import toast from "react-hot-toast";
 
 const TRAMITES_DISPONIBLES = [
   { value: "TRÁMITE MATRÍCULA INICIAL", label: "MATRÍCULA INICIAL" },
-  { value: "TRÁMITE INSCRIPCIÓN ALERTA", label: "INSCRIPCIÓN ALERTA" }
+  { value: "TRÁMITE INSCRIPCIÓN ALERTA", label: "PIGNORADO" }
 ];
 
 const CLASIFICACIONES_DISPONIBLES = [
@@ -27,7 +27,7 @@ const CLASIFICACIONES_DISPONIBLES = [
   { value: "MOTOCARRO", label: "MOTOCARRO" }
 ];
 
-const MAX_CARRITO = 50;
+const MAX_CARRITO = 40;
 
 // ─────────────────────────────────────────────
 // HELPERS
