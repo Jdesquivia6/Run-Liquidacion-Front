@@ -1,4 +1,4 @@
-import axios from "axios";
+import axiosClient from "./axiosClient";
 import { API_BASE as CFG } from "../config";
 
 const API = `${CFG}/liquidacion`;
@@ -6,12 +6,12 @@ const API = `${CFG}/liquidacion`;
 export const API_BASE = API;
 
 export async function consultarLiquidacion(payload) {
-  const response = await axios.post(`${API}/consultar-liquidacion`, payload);
+  const response = await axiosClient.post(`/liquidacion/consultar-liquidacion`, payload);
   return response.data;
 }
 
 export async function consultarLiquidacionBatch(items) {
-  const response = await axios.post(`${API}/consultar-liquidacion-batch`, { items });
+  const response = await axiosClient.post(`/liquidacion/consultar-liquidacion-batch`, { items });
   return response.data;
 }
 
@@ -61,11 +61,11 @@ export async function consultarLiquidacionBatchSecuencial(items, callbacks = {})
 }
 
 export async function imprimirPdfs(fileNames) {
-  const response = await axios.post(`${API}/imprimir-pdfs`, { fileNames });
+  const response = await axiosClient.post(`/liquidacion/imprimir-pdfs`, { fileNames });
   return response.data;
 }
 
 export async function crearJobImpresion(fileNames) {
-  const response = await axios.post(`${API}/crear-job-impresion`, { fileNames });
+  const response = await axiosClient.post(`/liquidacion/crear-job-impresion`, { fileNames });
   return response.data;
 }
