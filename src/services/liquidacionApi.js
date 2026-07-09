@@ -64,3 +64,8 @@ export async function imprimirPdfs(fileNames) {
   const response = await axios.post(`${API}/imprimir-pdfs`, { fileNames });
   return response.data;
 }
+
+export async function crearJobImpresion(fileNames) {
+  const response = await axios.post(`${API}/crear-job-impresion`, { fileNames });
+  return response.data;
+}

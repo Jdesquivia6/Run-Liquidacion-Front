@@ -73,7 +73,7 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
     // Solo llamar onComplete una vez cuando el job termina
     if (job && (job.estado === "finalizado" || job.estado === "fallido") && onComplete && !onCompleteCalled) {
       setOnCompleteCalled(true);
-      onComplete();
+      onComplete(job, items);
       return;
     }
 

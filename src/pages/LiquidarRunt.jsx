@@ -2,7 +2,7 @@ import { useState } from "react";
 import Header from "../components/Header";
 import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
-import { imprimirPdfs, API_BASE } from "../services/liquidacionApi";
+import { imprimirPdfs, crearJobImpresion, API_BASE } from "../services/liquidacionApi";
 import { crearJob, obtenerDetalleJob } from "../services/workerJobsApi";
 import JobProgress from "../components/JobProgress";
 import { v4 as uuidv4 } from "uuid";
@@ -513,6 +513,7 @@ export default function LiquidarRunt() {
   const [ultimaPlaca, setUltimaPlaca] = useState("");
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [jobActual, setJobActual] = useState(null);
+  const [jobImpresion, setJobImpresion] = useState(null);
 
   const totalTramites = carrito.reduce((sum, item) => sum + item.tramites.length, 0);
 
@@ -623,7 +624,7 @@ export default function LiquidarRunt() {
 
   const handleImprimirTodos = async () => {
     const exitosos = resultados.filter(r => r.ok && r.data?.descarga?.fileName);
-    if (exitosas.length === 0) {
+    if (exitosos.length === 0) {
       toast.error("No hay liquidaciones exitosas para imprimir");
       return;
     }
@@ -631,20 +632,31 @@ export default function LiquidarRunt() {
     const fileNames = exitosos.map(r => r.data.descarga.fileName);
 
     try {
-      const resp = await imprimirPdfs(fileNames);
-      if (resp.ok && resp.data) {
-        const { exitosas: imp, fallidas: fall } = resp.data;
-        if (fall === 0) {
-          toast.success(`✅ ${imp} liquidación(es) enviadas a imprimir`);
-        } else {
-          toast.error(`${imp} impresas, ${fall} fallidas`);
-        }
+      const resp = await crearJobImpresion(fileNames);
+      if (resp.job?.id_job) {
+        setJobImpresion(resp.job.id_job);
+        toast.success(`Impresión enviada al equipo local (${fileNames.length} PDF(s))`);
       } else {
-        toast.error(resp.error || "Error al imprimir");
+        toast.error(resp.error || "Error al crear job de impresión");
       }
-    } catch {
+    } catch (err) {
+      console.error("Error al imprimir:", err);
       toast.error("Error de conexión al imprimir");
     }
+  };
+
+  const procesarJobImpresionCompletado = (job) => {
+    const items = job.items || [];
+    const impresos = items.filter(i => i.estado === 'exitoso').length;
+    const fallidos = items.filter(i => i.estado === 'fallido').length;
+
+    if (fallidos === 0) {
+      toast.success(`✅ ${impresos} PDF(s) impreso(s) correctamente`);
+    } else {
+      toast.error(`${impresos} impresos, ${fallidos} fallidos`);
+    }
+
+    setJobImpresion(null);
   };
 
   const handleGenerarTodo = async () => {
@@ -763,6 +775,14 @@ export default function LiquidarRunt() {
                   jobId={jobActual}
                   onClose={() => setJobActual(null)}
                   onComplete={() => procesarJobCompletado(jobActual)}
+                />
+              )}
+
+              {jobImpresion && (
+                <JobProgress
+                  jobId={jobImpresion}
+                  onClose={() => setJobImpresion(null)}
+                  onComplete={(job) => procesarJobImpresionCompletado(job)}
                 />
               )}
 
