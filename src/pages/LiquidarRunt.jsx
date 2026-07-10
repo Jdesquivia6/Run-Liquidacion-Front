@@ -2,8 +2,9 @@ import { useState } from "react";
 import Header from "../components/Header";
 import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
-import { imprimirPdfs, crearJobImpresion, API_BASE } from "../services/liquidacionApi";
+import { API_BASE } from "../services/liquidacionApi";
 import { crearJob, obtenerDetalleJob } from "../services/workerJobsApi";
+import axios from "axios";
 import JobProgress from "../components/JobProgress";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -273,7 +274,7 @@ function EmptyCart() {
       <h3 className="text-base font-bold text-[#1e293b] mb-1">Carrito vacío</h3>
       <p className="text-sm text-[#64748b] max-w-sm mx-auto leading-relaxed">
         Agregue placas con sus trámites para generar liquidaciones RUNT en lote.
-        Máximo 50 placas por generación.
+        Máximo 40 placas por generación.
       </p>
     </div>
   );
@@ -513,7 +514,6 @@ export default function LiquidarRunt() {
   const [ultimaPlaca, setUltimaPlaca] = useState("");
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [jobActual, setJobActual] = useState(null);
-  const [jobImpresion, setJobImpresion] = useState(null);
 
   const totalTramites = carrito.reduce((sum, item) => sum + item.tramites.length, 0);
 
@@ -630,33 +630,35 @@ export default function LiquidarRunt() {
     }
 
     const fileNames = exitosos.map(r => r.data.descarga.fileName);
+    const token = localStorage.getItem("token");
 
     try {
-      const resp = await crearJobImpresion(fileNames);
-      if (resp.job?.id_job) {
-        setJobImpresion(resp.job.id_job);
-        toast.success(`Impresión enviada al equipo local (${fileNames.length} PDF(s))`);
+      const resp = await axios.post(
+        'http://localhost:3000/api/liquidacion/imprimir-pdfs',
+        { fileNames },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const data = resp.data;
+      if (data?.ok && data?.data) {
+        const { exitosas, fallidas } = data.data;
+        if (fallidas === 0) {
+          toast.success(`✅ ${exitosas} PDF(s) enviado(s) a la impresora`);
+        } else {
+          toast.error(`${exitosas} impreso(s), ${fallidas} fallido(s)`);
+        }
       } else {
-        toast.error(resp.error || "Error al crear job de impresión");
+        toast.error(data?.error || "Error al imprimir");
       }
     } catch (err) {
       console.error("Error al imprimir:", err);
-      toast.error("Error de conexión al imprimir");
+      const mensaje = err.response?.data?.error || "Error de conexión al imprimir";
+      toast.error(mensaje);
     }
-  };
-
-  const procesarJobImpresionCompletado = (job) => {
-    const items = job.items || [];
-    const impresos = items.filter(i => i.estado === 'exitoso').length;
-    const fallidos = items.filter(i => i.estado === 'fallido').length;
-
-    if (fallidos === 0) {
-      toast.success(`✅ ${impresos} PDF(s) impreso(s) correctamente`);
-    } else {
-      toast.error(`${impresos} impresos, ${fallidos} fallidos`);
-    }
-
-    setJobImpresion(null);
   };
 
   const handleGenerarTodo = async () => {
@@ -775,14 +777,6 @@ export default function LiquidarRunt() {
                   jobId={jobActual}
                   onClose={() => setJobActual(null)}
                   onComplete={() => procesarJobCompletado(jobActual)}
-                />
-              )}
-
-              {jobImpresion && (
-                <JobProgress
-                  jobId={jobImpresion}
-                  onClose={() => setJobImpresion(null)}
-                  onComplete={(job) => procesarJobImpresionCompletado(job)}
                 />
               )}
 
