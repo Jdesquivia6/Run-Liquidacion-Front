@@ -622,7 +622,7 @@ export default function LiquidarRunt() {
     window.open(url, "_blank");
   };
 
-  const handleImprimirTodos = async () => {
+  const handleImprimirTodos = () => {
     const exitosos = resultados.filter(r => r.ok && r.data?.descarga?.fileName);
     if (exitosos.length === 0) {
       toast.error("No hay liquidaciones exitosas para imprimir");
@@ -630,35 +630,12 @@ export default function LiquidarRunt() {
     }
 
     const fileNames = exitosos.map(r => r.data.descarga.fileName);
-    const token = localStorage.getItem("token");
+    const filesParam = encodeURIComponent(fileNames.join(','));
+    const url = `http://localhost:3000/api/liquidacion/imprimir-pdfs?files=${filesParam}`;
 
-    try {
-      const resp = await axios.post(
-        'http://localhost:3000/api/liquidacion/imprimir-pdfs',
-        { fileNames },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-      const data = resp.data;
-      if (data?.ok && data?.data) {
-        const { exitosas, fallidas } = data.data;
-        if (fallidas === 0) {
-          toast.success(`✅ ${exitosas} PDF(s) enviado(s) a la impresora`);
-        } else {
-          toast.error(`${exitosas} impreso(s), ${fallidas} fallido(s)`);
-        }
-      } else {
-        toast.error(data?.error || "Error al imprimir");
-      }
-    } catch (err) {
-      console.error("Error al imprimir:", err);
-      const mensaje = err.response?.data?.error || "Error de conexión al imprimir";
-      toast.error(mensaje);
-    }
+    // Abrir en nueva pestaña para evitar CORS/PNA del navegador
+    window.open(url, "_blank");
+    toast.info("Se abrió la ventana de impresión local");
   };
 
   const handleGenerarTodo = async () => {
