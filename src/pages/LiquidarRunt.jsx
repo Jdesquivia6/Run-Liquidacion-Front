@@ -120,6 +120,7 @@ function AddPlateCard({
   tramiteActual, setTramiteActual,
   clasificacionActual, setClasificacionActual,
   onAgregar,
+  onBorrarCampos,
   disabled
 }) {
   const handlePlacaChange = (e) => {
@@ -162,14 +163,23 @@ function AddPlateCard({
           options={CLASIFICACIONES_DISPONIBLES}
         />
 
-        <div className="flex items-end">
+        <div className="flex items-end gap-2">
           <button
             onClick={onAgregar}
             disabled={disabled}
-            className="w-full bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed"
+            className="flex-1 bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             Agregar
+          </button>
+          <button
+            type="button"
+            onClick={onBorrarCampos}
+            className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95"
+            title="Borrar campos"
+          >
+            <Trash2 className="w-4 h-4" />
+            
           </button>
         </div>
       </div>
@@ -589,11 +599,18 @@ export default function LiquidarRunt() {
     }
   };
 
+  const handleLimpiarFormulario = () => {
+    setPlacaInput("");
+    setTramiteActual("");
+    setClasificacionActual("");
+    setUltimaPlaca("");
+  };
+
   const handleLimpiarCarrito = () => {
     setCarrito([]);
-    setUltimaPlaca("");
     setResultados([]);
     setAttemptedSubmit(false);
+    handleLimpiarFormulario();
   };
 
   const handleEliminarTramiteItem = (itemId, tramiteIndex) => {
@@ -735,6 +752,7 @@ export default function LiquidarRunt() {
           clasificacionActual={clasificacionActual}
           setClasificacionActual={setClasificacionActual}
           onAgregar={handleAgregarAlCarrito}
+          onBorrarCampos={handleLimpiarFormulario}
           disabled={carrito.length >= MAX_CARRITO || loading}
         />
 
