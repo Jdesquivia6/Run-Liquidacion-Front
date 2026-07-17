@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Header from "../components/Header";
 import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
@@ -10,9 +10,11 @@ import { v4 as uuidv4 } from "uuid";
 import {
   Loader2, FileText, CheckCircle2, AlertCircle,
   Plus, Trash2, ShoppingCart, Download, ReceiptText,
-  Package, AlertTriangle, CircleCheck, Printer
+  Package, AlertTriangle, CircleCheck, Printer,
+  Volume2, VolumeX
 } from "lucide-react";
 import toast from "react-hot-toast";
+import sonidoLiquidacion from "../assets/sonidoLiquidacion.mp3";
 
 // ─────────────────────────────────────────────
 // CONFIGURACIÓN
@@ -415,7 +417,7 @@ function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-[#1e293b]">Resultados del batch</h3>
+          <h3 className="text-sm font-semibold text-[#1e293b]">Resultados</h3>
           <div className="flex items-center gap-4 text-xs">
             <span className="flex items-center gap-1 text-emerald-600 font-medium">
               <CircleCheck size={14} />
@@ -524,8 +526,37 @@ export default function LiquidarRunt() {
   const [ultimaPlaca, setUltimaPlaca] = useState("");
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [jobActual, setJobActual] = useState(null);
+  const [alarmaActiva, setAlarmaActiva] = useState(false);
+
+  const audioRef = useRef(new Audio(sonidoLiquidacion));
+  audioRef.current.loop = true;
 
   const totalTramites = carrito.reduce((sum, item) => sum + item.tramites.length, 0);
+
+  const iniciarAlarma = () => {
+    setAlarmaActiva(true);
+    audioRef.current.currentTime = 0;
+    audioRef.current.play().catch(err => {
+      console.warn("No se pudo reproducir la alarma:", err);
+    });
+  };
+
+  const detenerAlarma = () => {
+    setAlarmaActiva(false);
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+  };
+
+  useEffect(() => {
+    const hayResultados = resultados.length > 0;
+    const terminado = !loading && !jobActual && hayResultados;
+
+    if (terminado) {
+      iniciarAlarma();
+    } else {
+      detenerAlarma();
+    }
+  }, [loading, jobActual, resultados.length]);
 
   const handleAgregarAlCarrito = () => {
     if (!placaInput.trim()) {
@@ -604,6 +635,7 @@ export default function LiquidarRunt() {
     setTramiteActual("");
     setClasificacionActual("");
     setUltimaPlaca("");
+    detenerAlarma();
   };
 
   const handleLimpiarCarrito = () => {
@@ -645,6 +677,8 @@ export default function LiquidarRunt() {
       toast.error("No hay liquidaciones exitosas para imprimir");
       return;
     }
+
+    detenerAlarma();
 
     const fileNames = exitosos.map(r => r.data.descarga.fileName);
     const filesParam = encodeURIComponent(fileNames.join(','));
@@ -773,6 +807,25 @@ export default function LiquidarRunt() {
                   onClose={() => setJobActual(null)}
                   onComplete={() => procesarJobCompletado(jobActual)}
                 />
+              )}
+
+              {alarmaActiva && (
+                <div className="bg-amber-100 border-2 border-amber-400 rounded-2xl p-4 flex items-center justify-between animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <Volume2 className="w-6 h-6 text-amber-600" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-800">¡Proceso finalizado!</p>
+                      <p className="text-xs text-amber-700">Las liquidaciones están listas para imprimir.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={detenerAlarma}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-all"
+                  >
+                    <VolumeX size={14} />
+                    Silenciar alarma
+                  </button>
+                </div>
               )}
 
               <ResultsTable
