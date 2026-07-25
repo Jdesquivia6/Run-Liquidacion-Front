@@ -26,8 +26,14 @@ export default function RuntSessionStatus({ compact = false }) {
       const resp = await iniciarSesionRunt();
       setSession(resp.session);
       toast.success("Sesión RUNT registrada");
-    } catch {
-      toast.error("No se pudo registrar la sesión RUNT");
+    } catch (err) {
+      const msg =
+        err?.code === "ERR_NETWORK"
+          ? "Red: backend caído o bloqueado por el navegador"
+          : err?.response
+            ? `Servidor: ${err.response.status}`
+            : "No se pudo registrar la sesión RUNT";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
