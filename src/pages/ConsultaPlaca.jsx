@@ -5,7 +5,7 @@ import {
   listarHistorialVehiculos
 } from "../services/vehicleQueryApi";
 import { crearJob } from "../services/workerJobsApi";
-import { obtenerEstadoSesionRunt } from "../services/sessionRunt";
+import { getLocalSession } from "../services/sessionRunt";
 import { cargarPlacasPorArchivo } from "../services/placasApi";
 import PendingPlatesPanel from "../components/PendingPlatesPanel";
 import DetailModal from "../components/DetailModal";
@@ -148,8 +148,7 @@ export default function ConsultaPlaca() {
       setLoading(true);
       setError("");
 
-      const sessionResp = await obtenerEstadoSesionRunt();
-      const session = sessionResp.session;
+      const session = getLocalSession();
 
       if (!session?.activa) {
         toast.error("Sesión RUNT vencida. Debe iniciar sesión nuevamente.");

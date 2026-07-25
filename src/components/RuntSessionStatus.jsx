@@ -1,49 +1,51 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 import { Clock3, ShieldCheck, AlertTriangle, RefreshCcw } from "lucide-react";
-import {
-  obtenerEstadoSesionRunt,
-  iniciarSesionRunt
-} from "../services/sessionRunt";
+import { getLocalSession, saveLocalSession } from "../services/sessionRunt";
+
+const LOCAL_API_BASE = "http://localhost:3000";
 
 export default function RuntSessionStatus({ compact = false }) {
-  const [session, setSession] = useState(null);
+  const [session, setSession] = useState(() => getLocalSession());
   const [loading, setLoading] = useState(false);
   const alertShownRef = useRef(false);
 
-  const cargarEstado = async () => {
-    try {
-      const resp = await obtenerEstadoSesionRunt();
-      setSession(resp.session);
-    } catch {
-      setSession(null);
-    }
-  };
+  const actualizarEstado = useCallback(() => {
+    setSession(getLocalSession());
+  }, []);
 
-  const registrarSesion = async () => {
-    try {
-      setLoading(true);
-      const resp = await iniciarSesionRunt();
-      setSession(resp.session);
-      toast.success("Sesión RUNT registrada");
-    } catch (err) {
-      const msg =
-        err?.code === "ERR_NETWORK"
-          ? "Red: backend caído o bloqueado por el navegador"
-          : err?.response
-            ? `Servidor: ${err.response.status}`
-            : "No se pudo registrar la sesión RUNT";
-      toast.error(msg);
-    } finally {
-      setLoading(false);
+  const registrarSesion = () => {
+    const ventana = window.open(
+      `${LOCAL_API_BASE}/api/runt-session/iniciar`,
+      "runtSession",
+      "width=420,height=200"
+    );
+    if (!ventana) {
+      toast.error("Bloqueador de popups detectado. Permite popups para esta página.");
+      return;
     }
+    setLoading(true);
   };
 
   useEffect(() => {
-    cargarEstado();
-    const interval = setInterval(cargarEstado, 30000);
-    return () => clearInterval(interval);
+    const handler = (event) => {
+      if (event.origin !== LOCAL_API_BASE) return;
+      if (event.data?.type === "runt-session-iniciada" && event.data?.payload?.session) {
+        saveLocalSession(event.data.payload.session);
+        setSession(getLocalSession());
+        toast.success("Sesión RUNT registrada");
+        setLoading(false);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
   }, []);
+
+  useEffect(() => {
+    actualizarEstado();
+    const interval = setInterval(actualizarEstado, 15000);
+    return () => clearInterval(interval);
+  }, [actualizarEstado]);
 
   const activa = session?.activa;
   const minutos = session?.minutosRestantes || 0;
