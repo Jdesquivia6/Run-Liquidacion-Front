@@ -19,11 +19,17 @@ import toast from "react-hot-toast";
 import sonidoLiquidacion from "../assets/sonidoLiquidacion.mp3";
 
 const TIPOS_DOCUMENTO = [
-  { value: "CÉDULA DE CIUDADANÍA", label: "Cédula de Ciudadanía" },
-  { value: "CÉDULA DE EXTRANJERÍA", label: "Cédula de Extranjería" },
+  { value: "Carnet Diplomático", label: "Carnet Diplomático" },
+  { value: "Cédula Ciudadanía", label: "Cédula Ciudadanía" },
+  { value: "Cédula Ecuatoriana", label: "Cédula Ecuatoriana" },
+  { value: "Cédula Venezolana", label: "Cédula Venezolana" },
+  { value: "Cédula de Extranjería", label: "Cédula de Extranjería" },
   { value: "NIT", label: "NIT" },
-  { value: "PASAPORTE", label: "Pasaporte" },
-  { value: "TARJETA DE IDENTIDAD", label: "Tarjeta de Identidad" }
+  { value: "Pasaporte", label: "Pasaporte" },
+  { value: "Permiso por Protección Temporal", label: "Permiso por Protección Temporal" },
+  { value: "Registro Civil", label: "Registro Civil" },
+  { value: "TI2", label: "TI2" },
+  { value: "Tarjeta de Identidad", label: "Tarjeta de Identidad" }
 ];
 
 const TRAMITES_DISPONIBLES = [
