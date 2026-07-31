@@ -12,14 +12,18 @@ import {
   Loader2, FileText, CheckCircle2, AlertCircle,
   Plus, Trash2, ShoppingCart, Download, ReceiptText,
   Package, AlertTriangle, CircleCheck, Printer,
-  Volume2, VolumeX
+  Volume2, VolumeX, User, Hash
 } from "lucide-react";
 import toast from "react-hot-toast";
 import sonidoLiquidacion from "../assets/sonidoLiquidacion.mp3";
 
-// ─────────────────────────────────────────────
-// CONFIGURACIÓN
-// ─────────────────────────────────────────────
+const TIPOS_DOCUMENTO = [
+  { value: "CÉDULA DE CIUDADANÍA", label: "Cédula de Ciudadanía" },
+  { value: "CÉDULA DE EXTRANJERÍA", label: "Cédula de Extranjería" },
+  { value: "NIT", label: "NIT" },
+  { value: "PASAPORTE", label: "Pasaporte" },
+  { value: "TARJETA DE IDENTIDAD", label: "Tarjeta de Identidad" }
+];
 
 const TRAMITES_DISPONIBLES = [
   { value: "TRÁMITE MATRÍCULA INICIAL", label: "MATRÍCULA INICIAL" },
@@ -35,12 +39,12 @@ const CLASIFICACIONES_DISPONIBLES = [
 
 const MAX_CARRITO = 40;
 
-// ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
-
 function labelTramite(value) {
   return TRAMITES_DISPONIBLES.find(t => t.value === value)?.label || value;
+}
+
+function labelTipoDoc(value) {
+  return TIPOS_DOCUMENTO.find(t => t.value === value)?.label || value;
 }
 
 function formatBytes(bytes) {
@@ -50,45 +54,33 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-// ─────────────────────────────────────────────
-// COMPONENTES INTERNOS
-// ─────────────────────────────────────────────
-
-function PageHeader({ totalPlacas, totalTramites }) {
+function PageHeader({ totalItems, totalTramites }) {
   return (
     <div className="bg-gradient-to-br from-[#00ABE4] to-[#0095C5] rounded-[28px] shadow-lg shadow-[#00ABE4]/20 p-6 md:p-8 relative overflow-hidden">
-      {/* Ícono decorativo semitransparente */}
       <div className="absolute right-4 bottom-3 opacity-10 select-none pointer-events-none hidden md:block">
         <ReceiptText className="w-40 h-40" />
       </div>
       <div className="absolute right-6 top-6 opacity-10 select-none pointer-events-none md:hidden">
         <ReceiptText className="w-20 h-20" />
       </div>
-
-      {/* Contenido principal */}
       <div className="relative z-10">
-        {/* Label superior */}
         <div className="flex items-center gap-1.5 mb-3">
           <FileText className="w-3.5 h-3.5 text-white/80" />
           <span className="text-xs font-medium text-white/80 uppercase tracking-wider">
-            Liquidaciones RUNT
+            Liquidaciones Personalizadas RUNT
           </span>
         </div>
-
-        {/* Título y descripción */}
         <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight">
           Liquidar valores RUNT
         </h2>
         <p className="mt-2 text-sm md:text-base text-white/80 max-w-xl leading-relaxed">
-          Agregue placas, seleccione trámites y genere liquidaciones masivas de forma automática.
+          Agregue tipo documento, número, placas, seleccione trámites y genere liquidaciones masivas con solicitante personalizado.
         </p>
-
-        {/* Badges de resumen, solo si hay items */}
-        {totalPlacas > 0 && (
+        {totalItems > 0 && (
           <div className="flex items-center gap-2 mt-4 flex-wrap">
             <span className="bg-white/20 backdrop-blur text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
               <ShoppingCart size={12} />
-              {totalPlacas} placa{totalPlacas !== 1 ? "s" : ""}
+              {totalItems} item{totalItems !== 1 ? "s" : ""}
             </span>
             <span className="bg-white/20 backdrop-blur text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
               <FileText size={12} />
@@ -119,6 +111,8 @@ function HelpText({ children }) {
 }
 
 function AddPlateCard({
+  tipoDocInput, setTipoDocInput,
+  numDocInput, setNumDocInput,
   placaInput, setPlacaInput,
   tramiteActual, setTramiteActual,
   clasificacionActual, setClasificacionActual,
@@ -126,70 +120,85 @@ function AddPlateCard({
   onBorrarCampos,
   disabled
 }) {
-  const handlePlacaChange = (e) => {
-    setPlacaInput(e.target.value);
-  };
-
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
       <div className="mb-1">
         <h3 className="text-sm font-semibold text-[#1e293b]">
-          Agregar placa y trámite
+          Agregar liquidación personalizada
         </h3>
         <p className="text-xs text-[#64748b] mt-0.5">
-          Seleccione la placa, el trámite y la clasificación correspondiente.
+          Seleccione tipo documento, ingrese número, placa, trámite y clasificación.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4">
-        <InputField
-          label="Placa *"
-          name="placaInput"
-          value={placaInput}
-          onChange={handlePlacaChange}
-          placeholder="Ej: ABC123"
-        />
+      <div className="space-y-4 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SelectField
+            label="Tipo documento *"
+            name="tipoDocInput"
+            value={tipoDocInput}
+            onChange={(e) => setTipoDocInput(e.target.value)}
+            options={TIPOS_DOCUMENTO}
+          />
 
-        <SelectField
-          label="Trámite *"
-          name="tramiteActual"
-          value={tramiteActual}
-          onChange={(e) => setTramiteActual(e.target.value)}
-          options={TRAMITES_DISPONIBLES}
-        />
+          <InputField
+            label="Número documento *"
+            name="numDocInput"
+            value={numDocInput}
+            onChange={(e) => setNumDocInput(e.target.value)}
+            placeholder="Ej: 1234567890"
+          />
 
-        <SelectField
-          label="Clasificación *"
-          name="clasificacionActual"
-          value={clasificacionActual}
-          onChange={(e) => setClasificacionActual(e.target.value)}
-          options={CLASIFICACIONES_DISPONIBLES}
-        />
+          <InputField
+            label="Placa *"
+            name="placaInput"
+            value={placaInput}
+            onChange={(e) => setPlacaInput(e.target.value)}
+            placeholder="Ej: ABC123"
+          />
+        </div>
 
-        <div className="flex items-end gap-2">
-          <button
-            onClick={onAgregar}
-            disabled={disabled}
-            className="flex-1 bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed"
-          >
-            <Plus className="w-4 h-4" />
-            Agregar
-          </button>
-          <button
-            type="button"
-            onClick={onBorrarCampos}
-            className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95"
-            title="Borrar campos"
-          >
-            <Trash2 className="w-4 h-4" />
-            
-          </button>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SelectField
+            label="Trámite *"
+            name="tramiteActual"
+            value={tramiteActual}
+            onChange={(e) => setTramiteActual(e.target.value)}
+            options={TRAMITES_DISPONIBLES}
+          />
+
+          <SelectField
+            label="Clasificación *"
+            name="clasificacionActual"
+            value={clasificacionActual}
+            onChange={(e) => setClasificacionActual(e.target.value)}
+            options={CLASIFICACIONES_DISPONIBLES}
+          />
+
+          <div className="flex items-end gap-2">
+            <button
+              onClick={onAgregar}
+              disabled={disabled}
+              className="flex-1 bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Agregar
+            </button>
+            <button
+              type="button"
+              onClick={onBorrarCampos}
+              className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95"
+              title="Borrar campos"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
       <HelpText>
-        💡 Para agregar varios trámites a una misma placa, no cambie el campo de placa entre cada "Agregar".
-        Para una placa nueva, simplemente escriba otra placa y agregue.
+        💡 Una liquidación se identifica por tipo doc + número doc + placa.
+        Para agregar varios trámites a una misma combinación, no cambie los campos de documento ni placa entre cada "Agregar".
       </HelpText>
     </div>
   );
@@ -211,7 +220,7 @@ function CartTable({ items, totalTramites, onEliminarItem, onEliminarTramite, on
           <ShoppingCart className="w-4 h-4 text-[#00ABE4]" />
           Carrito de liquidaciones
           <span className="text-xs text-[#64748b] font-normal">
-            · {items.length} placa{items.length !== 1 ? "s" : ""} · {totalTramites} trámite{totalTramites !== 1 ? "s" : ""}
+            · {items.length} item{items.length !== 1 ? "s" : ""} · {totalTramites} trámite{totalTramites !== 1 ? "s" : ""}
           </span>
         </h3>
         <button
@@ -227,6 +236,8 @@ function CartTable({ items, totalTramites, onEliminarItem, onEliminarTramite, on
           <thead>
             <tr className="border-b border-slate-100">
               <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">#</th>
+              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Documento</th>
+              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Número</th>
               <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Placa</th>
               <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Trámites</th>
               <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Clasificación</th>
@@ -240,6 +251,12 @@ function CartTable({ items, totalTramites, onEliminarItem, onEliminarTramite, on
                 className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors"
               >
                 <td className="py-3 px-3 text-[#94a3b8] text-xs">{(page - 1) * itemsPerPage + i + 1}</td>
+                <td className="py-3 px-3">
+                  <span className="text-xs text-[#64748b]">{labelTipoDoc(item.tipoDocumento)}</span>
+                </td>
+                <td className="py-3 px-3">
+                  <span className="font-mono font-bold text-[#1e293b] text-sm">{item.numeroDocumento}</span>
+                </td>
                 <td className="py-3 px-3">
                   <span className="font-mono font-bold text-[#1e293b] text-sm">{item.placa}</span>
                 </td>
@@ -270,7 +287,7 @@ function CartTable({ items, totalTramites, onEliminarItem, onEliminarTramite, on
                   <button
                     onClick={() => onEliminarItem(item.id)}
                     className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    title="Eliminar placa"
+                    title="Eliminar item"
                   >
                     <Trash2 size={15} />
                   </button>
@@ -294,15 +311,15 @@ function EmptyCart() {
       </div>
       <h3 className="text-base font-bold text-[#1e293b] mb-1">Carrito vacío</h3>
       <p className="text-sm text-[#64748b] max-w-sm mx-auto leading-relaxed">
-        Agregue placas con sus trámites para generar liquidaciones RUNT en lote.
-        Máximo 40 placas por generación.
+        Agregue tipo documento, número, placas y trámites para generar liquidaciones RUNT personalizadas en lote.
+        Máximo {MAX_CARRITO} items por generación.
       </p>
     </div>
   );
 }
 
 function BatchSummary({
-  totalPlacas,
+  totalItems,
   totalTramites,
   loading,
   progreso,
@@ -311,8 +328,8 @@ function BatchSummary({
   attemptedSubmit,
   errores
 }) {
-  const porcentaje = Math.min((totalPlacas / MAX_CARRITO) * 100, 100);
-  const estado = loading ? "Procesando" : totalPlacas === 0 ? "Sin datos" : "Listo para generar";
+  const porcentaje = Math.min((totalItems / MAX_CARRITO) * 100, 100);
+  const estado = loading ? "Procesando" : totalItems === 0 ? "Sin datos" : "Listo para generar";
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
@@ -323,8 +340,8 @@ function BatchSummary({
 
       <div className="space-y-3">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-[#64748b]">Total placas</span>
-          <span className="font-semibold text-[#1e293b]">{totalPlacas}</span>
+          <span className="text-[#64748b]">Total items</span>
+          <span className="font-semibold text-[#1e293b]">{totalItems}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-[#64748b]">Total trámites</span>
@@ -332,13 +349,13 @@ function BatchSummary({
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-[#64748b]">Máximo permitido</span>
-          <span className="font-medium text-[#64748b]">{MAX_CARRITO} placas</span>
+          <span className="font-medium text-[#64748b]">{MAX_CARRITO} items</span>
         </div>
 
         <div className="pt-1">
           <div className="flex items-center justify-between text-xs mb-1.5">
             <span className="text-[#94a3b8]">Uso del lote</span>
-            <span className="text-[#64748b] font-medium">{totalPlacas}/{MAX_CARRITO}</span>
+            <span className="text-[#64748b] font-medium">{totalItems}/{MAX_CARRITO}</span>
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
@@ -350,7 +367,7 @@ function BatchSummary({
 
         <div className="flex items-center justify-between text-xs pt-1">
           <span className="text-[#64748b]">Estado</span>
-          <span className={`font-medium ${loading ? "text-amber-600" : totalPlacas === 0 ? "text-[#94a3b8]" : "text-emerald-600"}`}>
+          <span className={`font-medium ${loading ? "text-amber-600" : totalItems === 0 ? "text-[#94a3b8]" : "text-emerald-600"}`}>
             {estado}
           </span>
         </div>
@@ -386,7 +403,7 @@ function BatchSummary({
 
       <button
         onClick={onGenerar}
-        disabled={!puedeEnviar || totalPlacas === 0}
+        disabled={!puedeEnviar || totalItems === 0}
         className="mt-5 w-full bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-semibold active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:hover:scale-100"
       >
         {loading ? (
@@ -402,7 +419,7 @@ function BatchSummary({
         )}
       </button>
 
-      {totalPlacas > 0 && !loading && (
+      {totalItems > 0 && !loading && (
         <p className="text-xs text-[#94a3b8] text-center mt-2.5">
           Se generarán todas las liquidaciones agregadas al carrito.
         </p>
@@ -423,10 +440,6 @@ function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
   const exitosas = resultados.filter(r => r.ok).length;
   const fallidas = resultados.filter(r => !r.ok).length;
   const todasExitosas = fallidas === 0;
-
-  const resumenTramites = (tramites) => {
-    return tramites.map(t => labelTramite(t.tramite)).join(", ");
-  };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
@@ -462,8 +475,10 @@ function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
           <thead>
             <tr className="border-b border-slate-100">
               <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">#</th>
+              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Documento</th>
+              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Número</th>
+              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Nombre</th>
               <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Placa</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Trámites</th>
               <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#94a3b8]">Estado</th>
               <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Detalle</th>
               <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#94a3b8]">PDF</th>
@@ -476,10 +491,18 @@ function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
                 className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors"
               >
                 <td className="py-3 px-3 text-[#94a3b8] text-xs">{(page - 1) * itemsPerPage + i + 1}</td>
+                <td className="py-3 px-3 text-xs text-[#64748b]">
+                  {r.tipoDocumento ? labelTipoDoc(r.tipoDocumento) : "—"}
+                </td>
+                <td className="py-3 px-3">
+                  <span className="font-mono font-bold text-[#1e293b] text-sm">{r.numeroDocumento || "—"}</span>
+                </td>
+                <td className="py-3 px-3 text-xs text-[#64748b] max-w-[150px] truncate">
+                  {r.nombreSolicitante || "—"}
+                </td>
                 <td className="py-3 px-3">
                   <span className="font-mono font-bold text-[#1e293b] text-sm">{r.placa}</span>
                 </td>
-                <td className="py-3 px-3 text-xs text-[#64748b]">{resumenTramites(r.tramites)}</td>
                 <td className="py-3 px-3 text-center">
                   {r.ok ? (
                     <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium">
@@ -521,18 +544,16 @@ function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
         <p className="text-xs text-blue-700 leading-relaxed">
           {todasExitosas
             ? "✅ Todas las liquidaciones se generaron correctamente. Los PDFs se abrieron en nuevas pestañas."
-            : `⚠️ ${fallidas} placa(s) fallaron. Revise los errores e intente de nuevo.`}
+            : `⚠️ ${fallidas} item(s) fallaron. Revise los errores e intente de nuevo.`}
         </p>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────
-
-export default function LiquidarRunt() {
+export default function LiquidarRuntPersonalizado() {
+  const [tipoDocInput, setTipoDocInput] = useState("");
+  const [numDocInput, setNumDocInput] = useState("");
   const [placaInput, setPlacaInput] = useState("");
   const [tramiteActual, setTramiteActual] = useState("");
   const [clasificacionActual, setClasificacionActual] = useState("");
@@ -540,7 +561,7 @@ export default function LiquidarRunt() {
   const [loading, setLoading] = useState(false);
   const [resultados, setResultados] = useState([]);
   const [progreso, setProgreso] = useState({ actual: 0, total: 0 });
-  const [ultimaPlaca, setUltimaPlaca] = useState("");
+  const [ultimoKey, setUltimoKey] = useState("");
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [jobActual, setJobActual] = useState(null);
   const [alarmaActiva, setAlarmaActiva] = useState(false);
@@ -575,7 +596,17 @@ export default function LiquidarRunt() {
     }
   }, [loading, jobActual, resultados.length]);
 
+  const generarKey = (tipoDoc, numDoc, placa) => `${tipoDoc}|${numDoc}|${placa}`;
+
   const handleAgregarAlCarrito = () => {
+    if (!tipoDocInput.trim()) {
+      toast.error("Seleccione un tipo de documento");
+      return;
+    }
+    if (!numDocInput.trim()) {
+      toast.error("Ingrese el número de documento");
+      return;
+    }
     if (!placaInput.trim()) {
       toast.error("Ingrese una placa");
       return;
@@ -590,23 +621,25 @@ export default function LiquidarRunt() {
     }
 
     const placaUpper = placaInput.trim().toUpperCase();
+    const numDocTrim = numDocInput.trim();
+    const currentKey = generarKey(tipoDocInput, numDocTrim, placaUpper);
 
     if (carrito.length >= MAX_CARRITO) {
-      toast.error(`Máximo ${MAX_CARRITO} placas en el carrito`);
+      toast.error(`Máximo ${MAX_CARRITO} items en el carrito`);
       return;
     }
 
-    if (placaUpper === ultimaPlaca && carrito.length > 0) {
+    if (currentKey === ultimoKey && carrito.length > 0) {
       const ultimoItem = carrito[carrito.length - 1];
 
       if (ultimoItem.tramites.length > 0 && ultimoItem.tramites[0].clasificacion !== clasificacionActual) {
-        toast.error("Todos los trámites de una placa deben compartir la misma clasificación (flujo RUNT)");
+        toast.error("Todos los trámites de un item deben compartir la misma clasificación (flujo RUNT)");
         return;
       }
 
       const yaExiste = ultimoItem.tramites.some(t => t.tramite === tramiteActual);
       if (yaExiste) {
-        toast.error("Ese trámite ya está agregado para esta placa");
+        toast.error("Ese trámite ya está agregado para este item");
         return;
       }
 
@@ -619,39 +652,47 @@ export default function LiquidarRunt() {
         return nuevo;
       });
 
-      toast.success(`${labelTramite(tramiteActual)} agregado a ${placaUpper}`);
+      toast.success(`${labelTramite(tramiteActual)} agregado al item`);
       setTramiteActual("");
       return;
     }
 
-    const existe = carrito.some(item => item.placa === placaUpper);
+    const existe = carrito.some(item =>
+      item.tipoDocumento === tipoDocInput &&
+      item.numeroDocumento === numDocTrim &&
+      item.placa === placaUpper
+    );
     if (existe) {
-      toast.error(`La placa ${placaUpper} ya está en el carrito. Para agregar más trámites, seleccione la misma placa sin cambiar.`);
+      toast.error("Esa combinación de documento + placa ya está en el carrito. Para agregar más trámites, use los mismos campos.");
       return;
     }
 
     setCarrito(prev => [...prev, {
       id: uuidv4(),
+      tipoDocumento: tipoDocInput,
+      numeroDocumento: numDocTrim,
       placa: placaUpper,
       tramites: [{ tramite: tramiteActual, clasificacion: clasificacionActual }]
     }]);
-    setUltimaPlaca(placaUpper);
+    setUltimoKey(currentKey);
     setTramiteActual("");
-    toast.success(`${placaUpper} → ${labelTramite(tramiteActual)} agregado al carrito`);
+    toast.success(`Item agregado al carrito`);
   };
 
   const handleEliminarItem = (id) => {
     setCarrito(prev => prev.filter(item => item.id !== id));
-    if (ultimaPlaca === carrito.find(i => i.id === id)?.placa) {
-      setUltimaPlaca("");
+    if (ultimoKey === carrito.find(i => i.id === id)?.id) {
+      setUltimoKey("");
     }
   };
 
   const handleLimpiarFormulario = () => {
+    setTipoDocInput("");
+    setNumDocInput("");
     setPlacaInput("");
     setTramiteActual("");
     setClasificacionActual("");
-    setUltimaPlaca("");
+    setUltimoKey("");
     detenerAlarma();
   };
 
@@ -673,9 +714,11 @@ export default function LiquidarRunt() {
 
   const obtenerErrores = () => {
     const errores = [];
-    if (carrito.length === 0) errores.push("Agregue al menos una placa al carrito");
+    if (carrito.length === 0) errores.push("Agregue al menos un item al carrito");
     for (const item of carrito) {
-      if (item.tramites.length === 0) errores.push(`La placa ${item.placa} no tiene trámites`);
+      if (!item.tipoDocumento) errores.push(`Item tiene tipo de documento vacío`);
+      if (!item.numeroDocumento) errores.push(`Item tiene número de documento vacío`);
+      if (item.tramites.length === 0) errores.push(`Item sin trámites`);
     }
     return errores;
   };
@@ -701,7 +744,6 @@ export default function LiquidarRunt() {
     const filesParam = encodeURIComponent(fileNames.join(','));
     const url = `http://localhost:3000/api/liquidacion/imprimir-pdfs?files=${filesParam}`;
 
-    // Abrir en nueva pestaña para evitar CORS/PNA del navegador
     window.open(url, "_blank");
     toast.info("Se abrió la ventana de impresión local");
   };
@@ -719,12 +761,14 @@ export default function LiquidarRunt() {
       setProgreso({ actual: 0, total: carrito.length });
 
       const items = carrito.map(item => ({
+        tipoDocumento: item.tipoDocumento,
+        numeroDocumento: item.numeroDocumento,
         placa: item.placa,
         tramites: item.tramites,
         fechaLiquidacion: new Date().toISOString().split("T")[0]
       }));
 
-      const resp = await crearJob("liquidaciones", items);
+      const resp = await crearJob("liquidaciones_personalizadas", items);
 
       if (resp.job?.id_job) {
         setJobActual(resp.job.id_job);
@@ -750,6 +794,9 @@ export default function LiquidarRunt() {
 
       const resultadosArr = items.map((item, index) => ({
         index,
+        tipoDocumento: item.payload?.tipoDocumento || "—",
+        numeroDocumento: item.payload?.numeroDocumento || "—",
+        nombreSolicitante: item.resultado?.data?.nombreSolicitante || item.resultado?.nombreSolicitante || null,
         placa: item.payload?.placa || "—",
         ok: item.estado === "exitoso",
         data: item.resultado?.data || item.resultado || null,
@@ -782,7 +829,7 @@ export default function LiquidarRunt() {
   const TARIFA_ALERT = (
     "Tarifa automática: Se selecciona según trámite + clasificación. "
     + "Para MEDIDAS CAUTELARES se mostrará un popup en el RUNT que debe aceptar manualmente. "
-    + `Máximo ${MAX_CARRITO} placas por lote.`
+    + `Máximo ${MAX_CARRITO} items por lote.`
   );
 
   return (
@@ -791,11 +838,15 @@ export default function LiquidarRunt() {
 
       <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4 md:space-y-5">
 
-        <PageHeader totalPlacas={carrito.length} totalTramites={totalTramites} />
+        <PageHeader totalItems={carrito.length} totalTramites={totalTramites} />
 
         {tieneItems && <AlertBanner message={TARIFA_ALERT} />}
 
         <AddPlateCard
+          tipoDocInput={tipoDocInput}
+          setTipoDocInput={setTipoDocInput}
+          numDocInput={numDocInput}
+          setNumDocInput={setNumDocInput}
           placaInput={placaInput}
           setPlacaInput={setPlacaInput}
           tramiteActual={tramiteActual}
@@ -854,7 +905,7 @@ export default function LiquidarRunt() {
 
             <div className="space-y-4 md:space-y-5">
               <BatchSummary
-                totalPlacas={carrito.length}
+                totalItems={carrito.length}
                 totalTramites={totalTramites}
                 loading={loading}
                 progreso={progreso}

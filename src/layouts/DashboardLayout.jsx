@@ -21,6 +21,7 @@ export default function DashboardLayout() {
     if (path.includes("datos-vehiculo")) return "datos-vehiculo";
     if (path.includes("personas-direcciones")) return "personas-direcciones";
     if (path.includes("historial")) return "historial";
+    if (path.includes("liquidacion-personalizada")) return "liquidacion-personalizada";
     if (path.includes("liquidacion")) return "liquidacion";
     if (path.includes("configuracion/impresora")) return "configuracion-impresora";
     if (path.includes("usuarios")) return "usuarios";
@@ -38,7 +39,8 @@ export default function DashboardLayout() {
       liquidacion: "/liquidacion",
       usuarios: "/usuarios",
       "configuracion-impresora": "/configuracion/impresora",
-      "ubicabilidad-personas": "/ubicabilidad-personas"
+      "ubicabilidad-personas": "/ubicabilidad-personas",
+      "liquidacion-personalizada": "/liquidacion-personalizada"
     };
 
     navigate(routes[module] || "/dashboard");

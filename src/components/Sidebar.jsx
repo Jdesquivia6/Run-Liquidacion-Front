@@ -10,7 +10,8 @@ import {
   Users,
   Printer,
   ChevronDown,
-  UserSearch
+  UserSearch,
+  FileText
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { motion } from "framer-motion";
@@ -23,7 +24,8 @@ const menu = [
   { id: "personas-direcciones", label: "Personas - Direcciones", icon: MapPin, module: "personas-direcciones" },
   { id: "ubicabilidad-personas", label: "Ubicabilidad Personas", icon: UserSearch, module: "ubicabilidad-personas" },
   { id: "historial", label: "Historial", icon: ClipboardList, module: "historial" },
-  { id: "liquidacion", label: "Liquidaciones RUNT", icon: ReceiptText, module: "liquidaciones" }
+  { id: "liquidacion", label: "Liquidaciones RUNT", icon: ReceiptText, module: "liquidaciones" },
+  { id: "liquidacion-personalizada", label: "Liq. Personalizada RUNT", icon: FileText, module: "liquidaciones_personalizadas" }
 ];
 
 const configMenu = [

@@ -14,6 +14,7 @@ import DatosVehiculo from "./pages/DatosVehiculo";
 import PersonasDirecciones from "./pages/PersonasDirecciones";
 import Historial from "./pages/Historial";
 import LiquidarRunt from "./pages/LiquidarRunt";
+import LiquidarRuntPersonalizado from "./pages/LiquidarRuntPersonalizado";
 import Usuarios from "./pages/Usuarios";
 import ConfiguracionImpresora from "./pages/ConfiguracionImpresora";
 import UbicabilidadPersonas from "./pages/UbicabilidadPersonas";
@@ -52,6 +53,7 @@ function App() {
             <Route path="usuarios" element={<Usuarios />} />
             <Route path="configuracion/impresora" element={<ConfiguracionImpresora />} />
             <Route path="ubicabilidad-personas" element={<UbicabilidadPersonas />} />
+            <Route path="liquidacion-personalizada" element={<LiquidarRuntPersonalizado />} />
           </Route>
 
           {/* Rutas directas para cada módulo (sin /dashboard/) */}
@@ -141,6 +143,17 @@ function App() {
             }
           >
             <Route index element={<UbicabilidadPersonas />} />
+          </Route>
+
+          <Route
+            path="/liquidacion-personalizada"
+            element={
+              <ProtectedRoute module="liquidaciones_personalizadas">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<LiquidarRuntPersonalizado />} />
           </Route>
 
           {/* Cambiar password protegido */}
