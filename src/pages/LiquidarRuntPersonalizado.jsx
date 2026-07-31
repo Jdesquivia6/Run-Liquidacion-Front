@@ -4,6 +4,7 @@ import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
 import { API_BASE } from "../services/liquidacionApi";
 import { crearJob, obtenerDetalleJob } from "../services/workerJobsApi";
+import Swal from "sweetalert2";
 import axios from "axios";
 import JobProgress from "../components/JobProgress";
 import Pagination from "../components/Pagination";
@@ -754,6 +755,17 @@ export default function LiquidarRuntPersonalizado() {
       errores.forEach(e => toast.error(e));
       return;
     }
+
+    const { isConfirmed } = await Swal.fire({
+      title: "¿Confirmar envío?",
+      html: `Revise su liquidacion (Numero de documento y Placa). Debe estar inscrito en el RUNT.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, enviar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#d33",
+    });
+    if (!isConfirmed) return;
 
     try {
       setLoading(true);
