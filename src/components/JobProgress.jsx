@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { obtenerProgresoJob, obtenerDetalleJob, cancelarJob, reintentarFallidos } from "../services/workerJobsApi";
+import { obtenerProgresoJob, obtenerDetalleJob, cancelarJob, reintentarFallidos, exportarJobExcel } from "../services/workerJobsApi";
 import toast from "react-hot-toast";
 import { 
   Play, Pause, RotateCcw, CheckCircle, XCircle, 
-  Clock, AlertTriangle, Loader2, RefreshCw, Trash2 
+  Clock, AlertTriangle, Loader2, RefreshCw, Trash2, Download 
 } from "lucide-react";
 
 const ESTADO_COLORS = {
@@ -111,6 +111,18 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
     }
   };
 
+  const handleDescargarExcel = async () => {
+    try {
+      setCargandoAccion(true);
+      await exportarJobExcel(jobId);
+      toast.success("Excel descargado");
+    } catch (error) {
+      toast.error("Error al descargar Excel");
+    } finally {
+      setCargandoAccion(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -161,15 +173,29 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
           </div>
         )}
 
-        {job?.estado === "finalizado" && counters.fallidas > 0 && (
-          <button
-            onClick={handleReintentar}
-            disabled={cargandoAccion}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-xl hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Reintentar fallidos
-          </button>
+        {job?.estado === "finalizado" && (
+          <div className="flex flex-wrap gap-2">
+            {counters.fallidas > 0 && (
+              <button
+                onClick={handleReintentar}
+                disabled={cargandoAccion}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-xl hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Reintentar fallidos
+              </button>
+            )}
+            {["personas-direcciones", "ubicabilidad-personas"].includes(job?.modulo) && (
+              <button
+                onClick={handleDescargarExcel}
+                disabled={cargandoAccion}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl hover:bg-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                Descargar Excel
+              </button>
+            )}
+          </div>
         )}
       </div>
 

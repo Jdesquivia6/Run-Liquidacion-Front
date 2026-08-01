@@ -35,6 +35,25 @@ export async function obtenerDetalleJob(jobId) {
   return response.data;
 }
 
+export async function exportarJobExcel(jobId) {
+  const response = await api.get(`${API_BASE}/worker-jobs/${jobId}/exportar-excel`, {
+    responseType: "blob"
+  });
+
+  const disposition = response.headers?.["content-disposition"] || "";
+  const match = disposition.match(/filename="?([^";]+)"?/);
+  const nombre = match?.[1] || `job_${jobId}.xlsx`;
+
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", nombre);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export async function obtenerProgresoJob(jobId) {
   const response = await api.get(`${API_BASE}/worker-jobs/${jobId}/progreso`);
   return response.data;
