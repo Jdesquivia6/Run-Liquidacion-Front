@@ -1,17 +1,27 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 import { Clock3, ShieldCheck, AlertTriangle, RefreshCcw } from "lucide-react";
-import { getLocalSession, saveLocalSession } from "../services/sessionRunt";
+import { getLocalSession, saveLocalSession, obtenerEstadoSesionRunt } from "../services/sessionRunt";
 
 const LOCAL_API_BASE = "http://localhost:3000";
 
-export default function RuntSessionStatus({ compact = false }) {
-  const [session, setSession] = useState(() => getLocalSession());
+export default function RuntSessionStatus({ compact = false, iconOnly = false }) {
+  const [session, setSession] = useState(() => getLocalSession() || null);
   const [loading, setLoading] = useState(false);
   const alertShownRef = useRef(false);
 
-  const actualizarEstado = useCallback(() => {
-    setSession(getLocalSession());
+  const actualizarEstado = useCallback(async () => {
+    try {
+      const data = await obtenerEstadoSesionRunt();
+      if (data?.ok && data?.session) {
+        setSession(data.session);
+        if (data.session?.sessionStartedAt) {
+          saveLocalSession(data.session);
+        }
+      }
+    } catch (err) {
+      console.warn("No se pudo obtener estado de sesión RUNT:", err.message);
+    }
   }, []);
 
   const registrarSesion = () => {
@@ -55,8 +65,8 @@ export default function RuntSessionStatus({ compact = false }) {
     if (activa && minutos <= 5 && minutos > 0 && !alertShownRef.current) {
       alertShownRef.current = true;
       toast.error(
-        `⚠️ La sesión RUNT expira en ${minutos} minuto${minutos !== 1 ? "s" : ""}. Renueva ahora.`,
-        { duration: 8000 }
+        `La sesión RUNT expira en ${minutos} minuto${minutos !== 1 ? "s" : ""}. Renueva ahora.`,
+        { duration: 8000, icon: <AlertTriangle size={20} className="text-amber-500" /> }
       );
     }
     if (minutos > 5) {
@@ -87,6 +97,25 @@ export default function RuntSessionStatus({ compact = false }) {
   const porcentaje = activa
     ? Math.max(Math.min((minutos / 60) * 100, 100), 0)
     : 0;
+
+  if (iconOnly) {
+    const LoadingIcon = loading ? RefreshCcw : Icon;
+
+    return (
+      <button
+        onClick={registrarSesion}
+        disabled={loading}
+        title={`${statusStyle.label} · ${minutos} min restantes · Clic para renovar sesión`}
+        className={`
+          w-10 h-10 rounded-xl border flex items-center justify-center shrink-0
+          transition-colors disabled:opacity-60
+          ${statusStyle.wrapper}
+        `}
+      >
+        <LoadingIcon size={20} className={loading ? "animate-spin" : ""} />
+      </button>
+    );
+  }
 
   if (compact) {
     return (

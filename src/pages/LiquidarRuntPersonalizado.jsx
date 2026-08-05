@@ -13,7 +13,7 @@ import {
   Loader2, FileText, CheckCircle2, AlertCircle,
   Plus, Trash2, ShoppingCart, Download, ReceiptText,
   Package, AlertTriangle, CircleCheck, Printer,
-  Volume2, VolumeX, User, Hash
+  Volume2, VolumeX, User, Hash, Lightbulb
 } from "lucide-react";
 import toast from "react-hot-toast";
 import sonidoLiquidacion from "../assets/sonidoLiquidacion.mp3";
@@ -204,7 +204,8 @@ function AddPlateCard({
       </div>
 
       <HelpText>
-        💡 Una liquidación se identifica por tipo doc + número doc + placa.
+        <Lightbulb size={14} className="inline mr-1 text-amber-500" />
+        Una liquidación se identifica por tipo doc + número doc + placa.
         Para agregar varios trámites a una misma combinación, no cambie los campos de documento ni placa entre cada "Agregar".
       </HelpText>
     </div>
@@ -549,9 +550,17 @@ function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
 
       <div className="mt-4 p-3.5 bg-blue-50 border border-blue-100 rounded-xl">
         <p className="text-xs text-blue-700 leading-relaxed">
-          {todasExitosas
-            ? "✅ Todas las liquidaciones se generaron correctamente. Los PDFs se abrieron en nuevas pestañas."
-            : `⚠️ ${fallidas} item(s) fallaron. Revise los errores e intente de nuevo.`}
+          {todasExitosas ? (
+            <>
+              <CheckCircle2 size={14} className="inline mr-1 text-emerald-500" />
+              Todas las liquidaciones se generaron correctamente. Los PDFs se abrieron en nuevas pestañas.
+            </>
+          ) : (
+            <>
+              <AlertTriangle size={14} className="inline mr-1 text-amber-500" />
+              {fallidas} item(s) fallaron. Revise los errores e intente de nuevo.
+            </>
+          )}
         </p>
       </div>
     </div>

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Menu, Bell, UserCircle, LogOut } from "lucide-react";
 import Sidebar from "../components/Sidebar";
+import RuntSessionStatus from "../components/RuntSessionStatus";
+import RuntSessionAlarm from "../components/RuntSessionAlarm";
 import { useAuth } from "../auth/AuthContext";
 
 export default function DashboardLayout() {
@@ -84,6 +86,8 @@ export default function DashboardLayout() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 md:gap-3 shrink-0">
+                <RuntSessionStatus iconOnly />
+
                 <button className="w-10 h-10 rounded-xl border border-[#e2e8f0] text-[#64748b] flex items-center justify-center hover:bg-[#F8FAFC] hover:text-[#00ABE4] transition-colors">
                   <Bell size={20} />
                 </button>
@@ -104,6 +108,7 @@ export default function DashboardLayout() {
         </header>
 
         <section className="p-4 md:p-6 max-w-7xl mx-auto w-full">
+          <RuntSessionAlarm />
           <Outlet />
         </section>
       </main>

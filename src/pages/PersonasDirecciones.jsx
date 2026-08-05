@@ -240,7 +240,9 @@ export default function PersonasDirecciones() {
           toast.success(`Siguiente grupo: ${siguienteGrupo.tipoDocumento} (${docsSiguiente.length})`);
         } else {
           setTipoGrupoCargado(null);
-          toast.success("✅ Todos los grupos han sido procesados");
+          toast.success("Todos los grupos han sido procesados", {
+            icon: <CheckCircle size={20} className="text-emerald-500" />
+          });
         }
       }
 
@@ -860,7 +862,9 @@ export default function PersonasDirecciones() {
                   setColaJobs([]);
                   setDocumentos("");
                   setTipoGrupoCargado(null);
-                  toast.success("✅ Proceso por jobs finalizado");
+                  toast.success("Proceso por jobs finalizado", {
+                    icon: <CheckCircle size={20} className="text-emerald-500" />
+                  });
                 }
               }}
             />
