@@ -48,6 +48,12 @@ export default function PersonasDirecciones() {
   const [paginaDetalle, setPaginaDetalle] = useState(1);
   const ITEMS_POR_PAGINA = 12;
 
+  // ── Vista consolidada (todos los orígenes: fotodetección, Excel, APIs) ──
+  const [mostrarConsolidado, setMostrarConsolidado] = useState(false);
+  const [cargandoConsolidado, setCargandoConsolidado] = useState(false);
+  const [datosConsolidado, setDatosConsolidado] = useState({ results: [], origenes: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
+  const [filtrosConsolidado, setFiltrosConsolidado] = useState({ origen: "", estado: "", documento: "", fecha_inicio: "", fecha_fin: "" });
+
   // Cargar personas pendientes desde el backend
   const cargarPersonasPendientes = async (limit = limitPendientes) => {
     try {
@@ -106,8 +112,55 @@ export default function PersonasDirecciones() {
     }
   };
 
-  const exportarExcel = () => {
-    if (historialDirecciones.length === 0) {
+  // ── Vista consolidada: filtros por origen, estado, documento y fecha ──
+  const cargarConsolidado = async (pagina = 1, filtros = filtrosConsolidado) => {
+    try {
+      setCargandoConsolidado(true);
+      const params = new URLSearchParams({ page: pagina, limit: datosConsolidado.pagination.limit });
+      if (filtros.origen) params.append("origen", filtros.origen);
+      if (filtros.estado) params.append("estado", filtros.estado);
+      if (filtros.documento) params.append("documento", filtros.documento);
+      if (filtros.fecha_inicio) params.append("fecha_inicio", filtros.fecha_inicio);
+      if (filtros.fecha_fin) params.append("fecha_fin", filtros.fecha_fin);
+
+      const response = await fetch(`${API_BASE}/personas/direcciones/consolidado?${params.toString()}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Error cargando el consolidado");
+      }
+
+      setDatosConsolidado(data.data);
+      setMostrarConsolidado(true);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCargandoConsolidado(false);
+    }
+  };
+
+  const handleFiltroConsolidado = (e) => {
+    setFiltrosConsolidado((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const estadoConsolidado = (row) => {
+    switch (row.estado_publico) {
+      case "ENCONTRADA":
+        return { label: "Encontrada", class: "bg-emerald-100 text-emerald-700" };
+      case "PENDIENTE":
+        return { label: "Pendiente", class: "bg-amber-100 text-amber-700" };
+      case "EN_PROCESO":
+        return { label: "En proceso", class: "bg-blue-100 text-blue-700" };
+      case "SIN_INFORMACION":
+        return { label: "Sin información", class: "bg-slate-100 text-slate-700" };
+      case "ERROR":
+        return { label: "Error", class: "bg-red-100 text-red-700" };
+      default:
+        return { label: row.estado_publico || "—", class: "bg-slate-100 text-slate-700" };
+    }
+  };
+
+  const exportarExcel = () => {    if (historialDirecciones.length === 0) {
       toast.error("No hay datos para exportar");
       return;
     }
@@ -574,6 +627,21 @@ export default function PersonasDirecciones() {
             </div>
           )}
 
+          {/* Vista consolidada de todos los orígenes */}
+          <div className="mb-6 flex items-center gap-4">
+            <button
+              onClick={() => (mostrarConsolidado ? setMostrarConsolidado(false) : cargarConsolidado(1))}
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl font-semibold text-white transition-all hover:shadow-lg"
+              style={{ backgroundColor: COLORS.primary }}
+            >
+              <MapPin size={18} />
+              {mostrarConsolidado ? "Ocultar vista consolidada" : "Vista consolidada"}
+            </button>
+            <span className="text-sm" style={{ color: COLORS.textSecondary }}>
+              Todos los orígenes: fotodetección, Excel y servicios API
+            </span>
+          </div>
+
           <div className="mb-4">
             <label className="text-sm font-semibold block mb-2" style={{ color: COLORS.textPrimary }}>
               Tipo de documento manual (si no viene de pendientes)
@@ -869,6 +937,207 @@ export default function PersonasDirecciones() {
               }}
             />
           </div>
+        )}
+
+        {/* VISTA CONSOLIDADA — todos los orígenes, con filtros */}
+        {mostrarConsolidado && (
+          <section
+            className="rounded-3xl p-4 md:p-6 shadow-sm"
+            style={{
+              backgroundColor: COLORS.cardBg,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)"
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
+                  Vista consolidada
+                </h3>
+                <p className="text-sm" style={{ color: COLORS.textSecondary }}>
+                  {datosConsolidado.pagination.total} registro(s) — fotodetección, Excel y servicios API
+                </p>
+              </div>
+              <button
+                onClick={() => cargarConsolidado(datosConsolidado.pagination.page)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm"
+                style={{ borderColor: COLORS.border, color: COLORS.textSecondary }}
+              >
+                <RefreshCw size={14} className={cargandoConsolidado ? "animate-spin" : ""} />
+                Recargar
+              </button>
+            </div>
+
+            {/* Filtros */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
+              <select
+                name="origen"
+                value={filtrosConsolidado.origen}
+                onChange={handleFiltroConsolidado}
+                className="px-3 py-2 rounded-xl border text-xs"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+              >
+                <option value="">Todos los orígenes</option>
+                {(datosConsolidado.origenes || []).map((o) => (
+                  <option key={o.origen} value={o.origen}>
+                    {o.origen} ({o.total})
+                  </option>
+                ))}
+              </select>
+
+              <select
+                name="estado"
+                value={filtrosConsolidado.estado}
+                onChange={handleFiltroConsolidado}
+                className="px-3 py-2 rounded-xl border text-xs"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+              >
+                <option value="">Todos los estados</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="EN_PROCESO">En proceso</option>
+                <option value="ENCONTRADA">Encontrada</option>
+                <option value="SIN_INFORMACION">Sin información</option>
+                <option value="ERROR">Error</option>
+              </select>
+
+              <input
+                name="documento"
+                value={filtrosConsolidado.documento}
+                onChange={handleFiltroConsolidado}
+                placeholder="Documento"
+                className="px-3 py-2 rounded-xl border text-xs"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+              />
+
+              <input
+                type="date"
+                name="fecha_inicio"
+                value={filtrosConsolidado.fecha_inicio}
+                onChange={handleFiltroConsolidado}
+                className="px-3 py-2 rounded-xl border text-xs"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+              />
+
+              <input
+                type="date"
+                name="fecha_fin"
+                value={filtrosConsolidado.fecha_fin}
+                onChange={handleFiltroConsolidado}
+                className="px-3 py-2 rounded-xl border text-xs"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3 mb-4">
+              <button
+                onClick={() => cargarConsolidado(1)}
+                disabled={cargandoConsolidado}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white text-sm transition-all hover:shadow-lg disabled:opacity-60"
+                style={{ backgroundColor: COLORS.primary }}
+              >
+                {cargandoConsolidado ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                Aplicar filtros
+              </button>
+              <button
+                onClick={() => {
+                  const vacios = { origen: "", estado: "", documento: "", fecha_inicio: "", fecha_fin: "" };
+                  setFiltrosConsolidado(vacios);
+                  cargarConsolidado(1, vacios);
+                }}
+                className="px-5 py-2.5 rounded-xl border text-sm"
+                style={{ borderColor: COLORS.border, color: COLORS.textSecondary }}
+              >
+                Limpiar filtros
+              </button>
+            </div>
+
+            {cargandoConsolidado ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 className="w-6 h-6 animate-spin" style={{ color: COLORS.primary }} />
+              </div>
+            ) : (datosConsolidado.results || []).length === 0 ? (
+              <p className="text-sm text-center py-8" style={{ color: COLORS.textSecondary }}>
+                No hay registros para los filtros seleccionados.
+              </p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead style={{ backgroundColor: COLORS.pageBg }}>
+                      <tr>
+                        <th className="py-2 px-3 text-left">Origen</th>
+                        <th className="py-2 px-3 text-left">Tipo</th>
+                        <th className="py-2 px-3 text-left">Documento</th>
+                        <th className="py-2 px-3 text-left">Nombre</th>
+                        <th className="py-2 px-3 text-left">Dirección</th>
+                        <th className="py-2 px-3 text-left">Estado</th>
+                        <th className="py-2 px-3 text-left">Fecha consulta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(datosConsolidado.results || []).map((row) => {
+                        const est = estadoConsolidado(row);
+                        return (
+                          <tr key={row.id_per_natural_dir} className="border-t" style={{ borderColor: COLORS.border }}>
+                            <td className="py-2 px-3">
+                              <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
+                                {row.origen_registro || "—"}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3" style={{ color: COLORS.textSecondary }}>{row.tipo_documento}</td>
+                            <td className="py-2 px-3 font-mono font-bold" style={{ color: COLORS.textPrimary }}>
+                              {row.numero_documento}
+                            </td>
+                            <td className="py-2 px-3" style={{ color: COLORS.textPrimary }}>
+                              {[row.nombres, row.apellidos].filter(Boolean).join(" ") || "—"}
+                            </td>
+                            <td className="py-2 px-3 max-w-[220px] truncate" style={{ color: COLORS.textSecondary }}>
+                              {row.error_consulta_direccion
+                                ? <span style={{ color: COLORS.error }}>{row.error_consulta_direccion}</span>
+                                : row.direccion || "—"}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${est.class}`}>
+                                {est.label}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3" style={{ color: COLORS.textSecondary }}>
+                              {row.fecha_consulta_direccion
+                                ? new Date(row.fecha_consulta_direccion).toLocaleDateString("es-CO")
+                                : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {datosConsolidado.pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-4">
+                    <button
+                      disabled={datosConsolidado.pagination.page <= 1}
+                      onClick={() => cargarConsolidado(datosConsolidado.pagination.page - 1)}
+                      className="px-3 py-1.5 rounded-lg border text-xs disabled:opacity-50"
+                      style={{ borderColor: COLORS.border }}
+                    >
+                      Anterior
+                    </button>
+                    <span className="text-xs" style={{ color: COLORS.textSecondary }}>
+                      {datosConsolidado.pagination.page} / {datosConsolidado.pagination.totalPages}
+                    </span>
+                    <button
+                      disabled={datosConsolidado.pagination.page >= datosConsolidado.pagination.totalPages}
+                      onClick={() => cargarConsolidado(datosConsolidado.pagination.page + 1)}
+                      className="px-3 py-1.5 rounded-lg border text-xs disabled:opacity-50"
+                      style={{ borderColor: COLORS.border }}
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
         )}
 
         {/* Historial direcciones — solo exportable */}
