@@ -1,18 +1,26 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import toast from "react-hot-toast";
 import PageHeroHeader from "../components/PageHeroHeader";
+import * as XLSX from "xlsx";
 import {
   validarArchivoExcel,
+  guardarDocumentos,
   obtenerDocumentosParaProcesar,
-  listarResultados
+  listarResultados,
+  listarPendientes,
+  listarHistorial,
+  limpiarDocumentos,
+  listarPendientesApi,
+  limpiarDocumentosApi
 } from "../services/ubicabilidadPersonasApi";
 import { crearJob } from "../services/workerJobsApi";
 import {
   Upload, FileText, CheckCircle2, AlertCircle,
-  Loader2, Search, MapPin, Eye, X
+  Loader2, Search, MapPin, Eye, X, Database, Download, Trash2, PlugZap
 } from "lucide-react";
 import DocumentosSwiper from "../components/DocumentosSwiper";
 import JobProgress from "../components/JobProgress";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function UbicabilidadPersonas() {
   const fileInputRef = useRef(null);
@@ -30,6 +38,36 @@ export default function UbicabilidadPersonas() {
 
   // Jobs activos para monitoreo
   const [jobsActivos, setJobsActivos] = useState([]);
+
+  // Personas pendientes desde BD
+  const [personasPendientes, setPersonasPendientes] = useState([]);
+  const [gruposPendientes, setGruposPendientes] = useState([]);
+  const [cargandoPendientes, setCargandoPendientes] = useState(false);
+  const [mostrarPendientes, setMostrarPendientes] = useState(false);
+  const [tipoDocumentoSeleccionado, setTipoDocumentoSeleccionado] = useState("");
+  const [documentosCargados, setDocumentosCargados] = useState("");
+  const [limitPendientes, setLimitPendientes] = useState(90);
+  const [confirmLimpiarOpen, setConfirmLimpiarOpen] = useState(false);
+
+  // ── Solicitudes API (servicios externos) — cola separada de fotodetección ──
+  const [mostrarPendientesApi, setMostrarPendientesApi] = useState(false);
+  const [cargandoPendientesApi, setCargandoPendientesApi] = useState(false);
+  const [origenesApi, setOrigenesApi] = useState([]);
+  const [totalApi, setTotalApi] = useState(0);
+  const [gruposApi, setGruposApi] = useState([]);
+  const [origenSeleccionadoApi, setOrigenSeleccionadoApi] = useState("");
+  const [documentosApi, setDocumentosApi] = useState("");
+  const [tipoDocumentoApi, setTipoDocumentoApi] = useState("");
+  const [origenCargadoApi, setOrigenCargadoApi] = useState("");
+  const [confirmLimpiarApiOpen, setConfirmLimpiarApiOpen] = useState(false);
+
+  // Historial de consultados
+  const [historial, setHistorial] = useState([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+
+  useEffect(() => {
+    cargarHistorial();
+  }, []);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -49,6 +87,200 @@ export default function UbicabilidadPersonas() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const cargarPersonasPendientes = async (limit = limitPendientes) => {
+    try {
+      setCargandoPendientes(true);
+      // Las dos fuentes nunca se mezclan en el mismo textarea
+      setDocumentosApi("");
+      setMostrarPendientesApi(false);
+      const resp = await listarPendientes(limit);
+      if (resp.ok) {
+        setPersonasPendientes(resp.personas || []);
+        setGruposPendientes(resp.grupos || []);
+        setMostrarPendientes(true);
+        // Auto-cargar primer grupo
+        if (resp.grupos?.length > 0) {
+          const primerGrupo = resp.grupos[0];
+          setDocumentosCargados(primerGrupo.documentos.join("\n"));
+          setTipoDocumentoSeleccionado(primerGrupo.tipoDocumento);
+        }
+        toast.success(`${resp.total} pendiente(s). Se cargó el primer tipo.`);
+      } else {
+        toast.error(resp.error || "Error cargando pendientes");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error cargando pendientes");
+    } finally {
+      setCargandoPendientes(false);
+    }
+  };
+
+  const handleLimpiarDocumentos = () => {
+    setConfirmLimpiarOpen(true);
+  };
+
+  const handleConfirmLimpiar = async () => {
+    setConfirmLimpiarOpen(false);
+    try {
+      const resp = await limpiarDocumentos();
+      if (resp.ok) {
+        toast.success(resp.mensaje, { duration: 6000 });
+        setMostrarPendientes(false);
+        setDocumentosCargados("");
+        setPersonasPendientes([]);
+        setGruposPendientes([]);
+      } else {
+        toast.error(resp.error || "Error limpiando documentos");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error limpiando documentos");
+    }
+  };
+
+  const cargarGrupoEnTextarea = (grupo) => {
+    setDocumentosCargados(grupo.documentos.join("\n"));
+    setTipoDocumentoSeleccionado(grupo.tipoDocumento);
+    setMostrarPendientes(false);
+    toast.success(`${grupo.documentos.length} documento(s) del grupo "${grupo.tipoDocumento}" cargado(s)`);
+  };
+
+  /* ─────────────── Solicitudes API (servicios externos) ─────────────── */
+
+  const cargarSolicitudesApi = async (origen = origenSeleccionadoApi) => {
+    try {
+      setCargandoPendientesApi(true);
+      // Las dos fuentes nunca se mezclan en el mismo textarea
+      setDocumentosCargados("");
+      setMostrarPendientes(false);
+      const resp = await listarPendientesApi(5000, origen);
+      if (!resp.ok) {
+        toast.error(resp.error || "Error cargando solicitudes API");
+        return;
+      }
+      setOrigenesApi(resp.origenes || []);
+      setTotalApi(resp.total || 0);
+      setGruposApi(resp.grupos || []);
+      setMostrarPendientesApi(true);
+
+      if (resp.grupos?.length > 0) {
+        const primer = resp.grupos[0];
+        setDocumentosApi(primer.documentos.join("\n"));
+        setTipoDocumentoApi(primer.tipoDocumento);
+        setOrigenCargadoApi(primer.origen);
+      } else {
+        setDocumentosApi("");
+        setTipoDocumentoApi("");
+        setOrigenCargadoApi("");
+      }
+
+      toast.success(`${resp.total || 0} pendiente(s) de servicios API`, { duration: 5000 });
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error cargando solicitudes API");
+    } finally {
+      setCargandoPendientesApi(false);
+    }
+  };
+
+  const cambiarOrigenApi = async (origen) => {
+    setOrigenSeleccionadoApi(origen);
+    await cargarSolicitudesApi(origen);
+  };
+
+  const cargarGrupoApi = (grupo) => {
+    setDocumentosApi(grupo.documentos.join("\n"));
+    setTipoDocumentoApi(grupo.tipoDocumento);
+    setOrigenCargadoApi(grupo.origen);
+    toast.success(`${grupo.documentos.length} documento(s) de "${grupo.origen}" cargado(s)`);
+  };
+
+  const handleCrearJobDesdeApi = async () => {
+    const docs = documentosApi.split(/[\n,;]+/).map((d) => d.trim()).filter(Boolean);
+    if (docs.length === 0) {
+      toast.error("No hay documentos para procesar");
+      return;
+    }
+    try {
+      setProcesando(true);
+      const items = docs.map((d) => ({
+        tipoDocumento: tipoDocumentoApi,
+        numeroDocumento: d
+      }));
+      const resp = await crearJob("ubicabilidad-personas", items);
+
+      const nuevosJobs = [];
+      if (resp.jobs && resp.jobs.length > 0) {
+        nuevosJobs.push(...resp.jobs.map((j) => j.id_job));
+        toast.success(resp.message || `Se crearon ${resp.jobs.length} trabajos`);
+      } else if (resp.job?.id_job) {
+        nuevosJobs.push(resp.job.id_job);
+        toast.success(`Trabajo creado con ${items.length} documento(s)`);
+      }
+
+      if (nuevosJobs.length > 0) {
+        setJobsActivos((prev) => [...prev, ...nuevosJobs]);
+        setDocumentosApi("");
+        setMostrarPendientesApi(false);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error al crear trabajo");
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleConfirmLimpiarApi = async () => {
+    setConfirmLimpiarApiOpen(false);
+    try {
+      const resp = await limpiarDocumentosApi(origenSeleccionadoApi);
+      if (resp.ok) {
+        toast.success(resp.mensaje, { duration: 6000 });
+        setDocumentosApi("");
+        setGruposApi([]);
+        setMostrarPendientesApi(false);
+        await cargarSolicitudesApi(origenSeleccionadoApi);
+      } else {
+        toast.error(resp.error || "Error limpiando solicitudes API");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error limpiando solicitudes API");
+    }
+  };
+
+  const handleCrearJobDesdeBD = async () => {
+    const docs = documentosCargados.split(/[\n,;]+/).map(d => d.trim()).filter(Boolean);
+    if (docs.length === 0) {
+      toast.error("No hay documentos para procesar");
+      return;
+    }
+    try {
+      setProcesando(true);
+      const items = docs.map(d => ({
+        tipoDocumento: tipoDocumentoSeleccionado,
+        numeroDocumento: d
+      }));
+      const resp = await crearJob("ubicabilidad-personas", items);
+
+      const nuevosJobs = [];
+      if (resp.jobs && resp.jobs.length > 0) {
+        nuevosJobs.push(...resp.jobs.map(j => j.id_job));
+        toast.success(resp.message || `Se crearon ${resp.jobs.length} trabajos`);
+      } else if (resp.job?.id_job) {
+        nuevosJobs.push(resp.job.id_job);
+        toast.success(`Trabajo creado con ${items.length} documento(s)`);
+      }
+
+      if (nuevosJobs.length > 0) {
+        setJobsActivos(prev => [...prev, ...nuevosJobs]);
+        setDocumentosCargados("");
+        setMostrarPendientes(false);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error al crear trabajo");
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const handleValidar = async () => {
     if (!archivo) {
       toast.error("Seleccione un archivo primero");
@@ -62,6 +294,20 @@ export default function UbicabilidadPersonas() {
       if (resp.ok) {
         setResultadoValidacion(resp.data);
         toast.success("Archivo validado correctamente");
+
+        // Guardar documentos en BD automáticamente
+        if (resp.data.documentos?.length > 0) {
+          const docsParaGuardar = resp.data.documentos.map(d => ({
+            tipo: d.tipo,
+            numero: d.numero
+          }));
+          const guardarResp = await guardarDocumentos(docsParaGuardar);
+          if (guardarResp.ok) {
+            toast.success(`BD: ${guardarResp.mensaje}`, { duration: 8000 });
+          } else {
+            toast.error("Error guardando en BD: " + (guardarResp.error || "Desconocido"));
+          }
+        }
       } else {
         toast.error(resp.error);
       }
@@ -135,6 +381,55 @@ export default function UbicabilidadPersonas() {
     cargarResultados(1);
   };
 
+  const cargarHistorial = async () => {
+    try {
+      setCargandoHistorial(true);
+      const resp = await listarHistorial();
+      if (resp.ok) {
+        setHistorial(resp.results || []);
+      } else {
+        toast.error(resp.error || "Error cargando historial");
+      }
+    } catch (err) {
+      toast.error("Error cargando historial");
+    } finally {
+      setCargandoHistorial(false);
+    }
+  };
+
+  const exportarExcel = () => {
+    if (historial.length === 0) {
+      toast.error("No hay datos para exportar");
+      return;
+    }
+    const columnas = [
+      "Tipo Documento", "Número Documento", "Nombres", "Apellidos",
+      "Celular", "Correo", "Dirección", "Municipio / Departamento",
+      "Teléfono", "Tipo Dirección", "Fecha Consulta"
+    ];
+    const filas = historial.map(item => [
+      item.tipo_documento || "",
+      item.numero_documento || "",
+      item.nombres || "",
+      item.apellidos || "",
+      item.celular || "",
+      item.correo || "",
+      item.direccion || "",
+      item.municio_departamento || "",
+      item.telefono || "",
+      item.tipo_direccion || "",
+      item.fecha_consulta_direccion
+        ? new Date(item.fecha_consulta_direccion).toLocaleString("es-CO", { timeZone: "America/Bogota" })
+        : ""
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([columnas, ...filas]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Historial Ubicabilidad");
+    ws["!cols"] = columnas.map(() => ({ wch: 22 }));
+    XLSX.writeFile(wb, `historial_ubicabilidad_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success(`Excel generado: ${historial.length} registro(s)`);
+  };
+
   const estadoLabel = (row) => {
     if (!row.direccion_consultada) return { label: "Pendiente", class: "bg-amber-100 text-amber-700" };
     if (row.direccion_encontrada) return { label: "Encontrada", class: "bg-emerald-100 text-emerald-700" };
@@ -150,6 +445,219 @@ export default function UbicabilidadPersonas() {
         description="Cargue documentos desde Excel o CSV para ejecutar el proceso de consulta y ubicación de direcciones."
         icon={MapPin}
       />
+
+      {/* ── Documentos pendientes: BD (fotodetección/Excel) vs Servicios API ── */}
+      {!mostrarPendientes && !mostrarPendientesApi && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                <Database size={20} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-[#1e293b]">Documentos pendientes</h3>
+                <p className="text-xs text-[#64748b]">Dos fuentes independientes: base de datos y servicios API</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 md:ml-auto">
+              <button
+                onClick={() => cargarPersonasPendientes(limitPendientes)}
+                disabled={cargandoPendientes}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+                style={{ backgroundColor: "#d97706" }}
+              >
+                {cargandoPendientes ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Cargando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Database size={16} />
+                    <span>Cargar desde BD</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleLimpiarDocumentos}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg"
+                style={{ backgroundColor: "#dc2626" }}
+              >
+                <Trash2 size={16} />
+                <span>Limpiar</span>
+              </button>
+
+              <div className="hidden md:block w-px h-8 bg-slate-200" />
+
+              <button
+                onClick={() => cargarSolicitudesApi(origenSeleccionadoApi)}
+                disabled={cargandoPendientesApi}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+                style={{ backgroundColor: "#7c3aed" }}
+              >
+                {cargandoPendientesApi ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Cargando...</span>
+                  </>
+                ) : (
+                  <>
+                    <PlugZap size={16} />
+                    <span>Cargar solicitudes API</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Panel de solicitudes API pendientes ── */}
+      {mostrarPendientesApi && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1e293b]">
+                Solicitudes API pendientes ({totalApi})
+              </h3>
+              <p className="text-xs text-[#64748b] mt-1">
+                Registros ingresados por servicios externos. No incluye fotodetección ni Excel.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setMostrarPendientesApi(false);
+                setDocumentosApi("");
+              }}
+              className="text-xs text-[#64748b] hover:text-[#1e293b]"
+            >
+              Cerrar
+            </button>
+          </div>
+
+          {/* Resumen por origen */}
+          <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 mb-4">
+            {origenesApi.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-[#94a3b8]">No hay solicitudes API pendientes.</p>
+            ) : (
+              <>
+                {origenesApi.map((o) => (
+                  <div key={o.origen} className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-xs font-medium text-[#1e293b]">{o.origen}</span>
+                    <span className="text-xs font-bold text-[#7c3aed]">{o.total.toLocaleString("es-CO")}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50">
+                  <span className="text-xs font-bold text-[#1e293b]">TOTAL</span>
+                  <span className="text-xs font-bold text-[#1e293b]">{totalApi.toLocaleString("es-CO")}</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Filtro por origen */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              onClick={() => cambiarOrigenApi("")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                origenSeleccionadoApi === ""
+                  ? "bg-[#7c3aed] text-white border-[#7c3aed]"
+                  : "bg-white text-[#64748b] border-slate-200 hover:border-[#7c3aed]"
+              }`}
+            >
+              Todos
+            </button>
+            {origenesApi.map((o) => (
+              <button
+                key={o.origen}
+                onClick={() => cambiarOrigenApi(o.origen)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  origenSeleccionadoApi === o.origen
+                    ? "bg-[#7c3aed] text-white border-[#7c3aed]"
+                    : "bg-white text-[#64748b] border-slate-200 hover:border-[#7c3aed]"
+                }`}
+              >
+                {o.origen} ({o.total})
+              </button>
+            ))}
+          </div>
+
+          {/* Grupos por origen + tipo de documento */}
+          {gruposApi.length === 0 ? (
+            <p className="text-sm text-[#94a3b8] text-center py-4">No hay grupos para mostrar.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {gruposApi.map((grupo) => (
+                <button
+                  key={`${grupo.origen}-${grupo.tipoDocumento}`}
+                  onClick={() => cargarGrupoApi(grupo)}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-[#7c3aed] hover:bg-violet-50/50 transition-colors text-left"
+                >
+                  <div>
+                    <p className="text-xs font-semibold text-[#7c3aed]">{grupo.origen}</p>
+                    <p className="text-sm font-semibold text-[#1e293b]">{grupo.tipoDocumento}</p>
+                    <p className="text-xs text-[#64748b]">{grupo.count} documento(s)</p>
+                  </div>
+                  <Upload className="w-4 h-4 text-[#7c3aed]" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={() => setConfirmLimpiarApiOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white transition-all hover:shadow-lg"
+              style={{ backgroundColor: "#dc2626" }}
+            >
+              <Trash2 size={14} />
+              Limpiar solicitudes API
+            </button>
+            <span className="text-xs text-[#94a3b8]">
+              Los documentos cargados se envían al mismo worker, en jobs de máximo 90.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Panel de personas pendientes ── */}
+      {mostrarPendientes && personasPendientes.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1e293b]">
+                Personas pendientes ({personasPendientes.length})
+              </h3>
+              <p className="text-xs text-[#64748b] mt-1">
+                Selecciona un grupo para cargarlo en el formulario
+              </p>
+            </div>
+            <button
+              onClick={() => { setMostrarPendientes(false); setDocumentosCargados(""); }}
+              className="text-xs text-[#64748b] hover:text-[#1e293b]"
+            >
+              Cerrar
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {gruposPendientes.map((grupo) => (
+              <button
+                key={grupo.tipoDocumento}
+                onClick={() => cargarGrupoEnTextarea(grupo)}
+                className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-[#00ABE4] hover:bg-blue-50/50 transition-colors text-left"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-[#1e293b]">{grupo.tipoDocumento}</p>
+                  <p className="text-xs text-[#64748b]">{grupo.count} documento(s)</p>
+                </div>
+                <Upload className="w-4 h-4 text-[#00ABE4]" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Tarjeta de carga ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
@@ -208,6 +716,84 @@ export default function UbicabilidadPersonas() {
           )}
         </div>
       </div>
+
+      {/* ── Formulario documentos desde BD ── */}
+      {documentosCargados && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Database className="w-5 h-5 text-[#d97706]" />
+            <h3 className="text-sm font-semibold text-[#1e293b]">
+              Documentos desde BD — {tipoDocumentoSeleccionado}
+            </h3>
+          </div>
+          <textarea
+            value={documentosCargados}
+            onChange={(e) => setDocumentosCargados(e.target.value)}
+            rows={6}
+            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono focus:outline-none focus:border-[#00ABE4] resize-none"
+            placeholder="Uno por línea, separados por coma o espacio"
+          />
+          <p className="text-xs text-[#64748b] mt-2">
+            {documentosCargados.split(/[\n,;]+/).filter(d => d.trim()).length} documento(s) cargado(s)
+          </p>
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={handleCrearJobDesdeBD}
+              disabled={procesando || !documentosCargados.trim()}
+              className="flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+            >
+              {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              {procesando ? "Creando trabajo..." : "Crear Job"}
+            </button>
+            <button
+              onClick={() => { setDocumentosCargados(""); setMostrarPendientes(false); }}
+              className="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-[#64748b] rounded-xl text-sm font-semibold transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Formulario documentos desde Servicios API ── */}
+      {documentosApi && (
+        <div className="bg-white rounded-2xl border border-violet-200 shadow-sm p-5 md:p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <PlugZap className="w-5 h-5 text-[#7c3aed]" />
+            <h3 className="text-sm font-semibold text-[#1e293b]">
+              Solicitudes API — {origenCargadoApi || "varios orígenes"} · {tipoDocumentoApi || "sin tipo"}
+            </h3>
+          </div>
+          <textarea
+            value={documentosApi}
+            onChange={(e) => setDocumentosApi(e.target.value)}
+            rows={6}
+            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono focus:outline-none focus:border-[#7c3aed] resize-none"
+            placeholder="Uno por línea, separados por coma o espacio"
+          />
+          <p className="text-xs text-[#64748b] mt-2">
+            {documentosApi.split(/[\n,;]+/).filter(d => d.trim()).length} documento(s) cargado(s)
+          </p>
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={handleCrearJobDesdeApi}
+              disabled={procesando || !documentosApi.trim()}
+              className="flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+            >
+              {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              {procesando ? "Creando trabajo..." : "Crear Job"}
+            </button>
+            <button
+              onClick={() => { setDocumentosApi(""); setMostrarPendientesApi(false); }}
+              className="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-[#64748b] rounded-xl text-sm font-semibold transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Resumen de validación ── */}
       {resultadoValidacion && (
@@ -390,6 +976,67 @@ export default function UbicabilidadPersonas() {
           </>
         )}
       </div>
+
+      {/* ── Historial de consultados ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-[#1e293b]">
+              Historial de ubicabilidad
+            </h3>
+            <p className="text-xs text-[#64748b] mt-1">
+              {historial.length > 0
+                ? `${historial.length} registro(s) consultados`
+                : "No hay datos cargados"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={cargarHistorial}
+              disabled={cargandoHistorial}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-xs text-[#64748b] hover:bg-slate-50 disabled:opacity-60"
+            >
+              {cargandoHistorial ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Upload size={14} />
+              )}
+              Recargar
+            </button>
+            <button
+              onClick={exportarExcel}
+              disabled={historial.length === 0}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+              style={{ backgroundColor: "#00ABE4" }}
+            >
+              <Download size={14} />
+              Exportar Excel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ConfirmModal
+        open={confirmLimpiarOpen}
+        title="Limpiar documentos"
+        message="¿Estás seguro de eliminar todos los documentos pendientes cargados desde Excel? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        onConfirm={handleConfirmLimpiar}
+        onCancel={() => setConfirmLimpiarOpen(false)}
+      />
+
+      <ConfirmModal
+        open={confirmLimpiarApiOpen}
+        title="Limpiar solicitudes API"
+        message={`¿Eliminar ${
+          origenSeleccionadoApi
+            ? `las solicitudes pendientes de "${origenSeleccionadoApi}"`
+            : "TODAS las solicitudes API pendientes"
+        }? Solo se borran registros aún no consultados. Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        onConfirm={handleConfirmLimpiarApi}
+        onCancel={() => setConfirmLimpiarApiOpen(false)}
+      />
     </div>
   );
 }
