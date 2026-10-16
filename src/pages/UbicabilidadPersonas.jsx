@@ -22,6 +22,8 @@ import DocumentosSwiper from "../components/DocumentosSwiper";
 import JobProgress from "../components/JobProgress";
 import ConfirmModal from "../components/ConfirmModal";
 
+const POR_JOB = 90;
+
 export default function UbicabilidadPersonas() {
   const fileInputRef = useRef(null);
 
@@ -164,7 +166,7 @@ export default function UbicabilidadPersonas() {
 
       if (resp.grupos?.length > 0) {
         const primer = resp.grupos[0];
-        setDocumentosApi(primer.documentos.join("\n"));
+        setDocumentosApi(primer.documentos.slice(0, POR_JOB).join("\n"));
         setTipoDocumentoApi(primer.tipoDocumento);
         setOrigenCargadoApi(primer.origen);
       } else {
@@ -187,10 +189,16 @@ export default function UbicabilidadPersonas() {
   };
 
   const cargarGrupoApi = (grupo) => {
-    setDocumentosApi(grupo.documentos.join("\n"));
+    const totalGrupo = grupo.documentos.length;
+    const lote = grupo.documentos.slice(0, POR_JOB);
+    setDocumentosApi(lote.join("\n"));
     setTipoDocumentoApi(grupo.tipoDocumento);
     setOrigenCargadoApi(grupo.origen);
-    toast.success(`${grupo.documentos.length} documento(s) de "${grupo.origen}" cargado(s)`);
+    toast.success(
+      totalGrupo > POR_JOB
+        ? `${lote.length} de ${totalGrupo} documento(s) cargados (lote de ${POR_JOB}). Vuelve a pulsar "Cargar" para el siguiente lote.`
+        : `${totalGrupo} documento(s) de "${grupo.origen}" cargado(s)`
+    );
   };
 
   const handleCrearJobDesdeApi = async () => {
@@ -199,9 +207,13 @@ export default function UbicabilidadPersonas() {
       toast.error("No hay documentos para procesar");
       return;
     }
+    const lote = docs.slice(0, POR_JOB);
+    if (docs.length > POR_JOB) {
+      toast(`Se envian los primeros ${POR_JOB} de ${docs.length} documento(s)`, { duration: 5000 });
+    }
     try {
       setProcesando(true);
-      const items = docs.map((d) => ({
+      const items = lote.map((d) => ({
         tipoDocumento: tipoDocumentoApi,
         numeroDocumento: d
       }));
@@ -463,8 +475,9 @@ export default function UbicabilidadPersonas() {
             <div className="flex flex-wrap items-center gap-3 md:ml-auto">
               <button
                 onClick={() => cargarPersonasPendientes(limitPendientes)}
-                disabled={cargandoPendientes}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+                disabled
+                title="Desactivado: Ubicabilidad Personas trabaja solo con solicitudes API"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#d97706" }}
               >
                 {cargandoPendientes ? (
@@ -482,7 +495,9 @@ export default function UbicabilidadPersonas() {
 
               <button
                 onClick={handleLimpiarDocumentos}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg"
+                disabled
+                title="Desactivado: Ubicabilidad Personas trabaja solo con solicitudes API"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{ backgroundColor: "#dc2626" }}
               >
                 <Trash2 size={16} />
