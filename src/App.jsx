@@ -170,7 +170,14 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
-        <Toaster position="top-right" />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 5000,
+            success: { duration: 6000 },
+            error: { duration: 4000 }
+          }}
+        />
       </BrowserRouter>
     </AuthProvider>
   );
