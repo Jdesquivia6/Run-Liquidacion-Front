@@ -55,12 +55,17 @@ export default function UbicabilidadPersonas() {
   const [mostrarPendientesApi, setMostrarPendientesApi] = useState(false);
   const [cargandoPendientesApi, setCargandoPendientesApi] = useState(false);
   const [origenesApi, setOrigenesApi] = useState([]);
+  const [aniosApi, setAniosApi] = useState([]);
   const [totalApi, setTotalApi] = useState(0);
+  const [totalEnColaApi, setTotalEnColaApi] = useState(0);
   const [gruposApi, setGruposApi] = useState([]);
+  const [anioSeleccionadoApi, setAnioSeleccionadoApi] = useState("");
   const [origenSeleccionadoApi, setOrigenSeleccionadoApi] = useState("");
   const [documentosApi, setDocumentosApi] = useState("");
   const [tipoDocumentoApi, setTipoDocumentoApi] = useState("");
   const [origenCargadoApi, setOrigenCargadoApi] = useState("");
+  const [anioCargadoApi, setAnioCargadoApi] = useState(null);
+  const [grupoCargadoApi, setGrupoCargadoApi] = useState(null);
   const [confirmLimpiarApiOpen, setConfirmLimpiarApiOpen] = useState(false);
 
   // Historial de consultados
@@ -148,34 +153,89 @@ export default function UbicabilidadPersonas() {
 
   /* ─────────────── Solicitudes API (servicios externos) ─────────────── */
 
-  const cargarSolicitudesApi = async (origen = origenSeleccionadoApi) => {
+  // Acepta tanto el formato nuevo (porProcesar/enCola/anio) como el viejo
+  // (count, sin anio) para que un backend desactualizado no se vea roto.
+  const normalizarGrupoApi = (grupo) => {
+    const documentos = grupo?.documentos || [];
+    const enCola = Number.isFinite(grupo?.enCola) ? grupo.enCola : 0;
+    const porProcesar = Number.isFinite(grupo?.porProcesar)
+      ? grupo.porProcesar
+      : documentos.length;
+
+    return {
+      ...grupo,
+      origen: grupo?.origen || "",
+      tipoDocumento: grupo?.tipoDocumento || "SIN_TIPO",
+      anio: Number.isFinite(grupo?.anio) ? grupo.anio : null,
+      documentos,
+      enCola,
+      porProcesar,
+      total: Number.isFinite(grupo?.total) ? grupo.total : porProcesar + enCola
+    };
+  };
+
+  const cargarSolicitudesApi = async (origen = origenSeleccionadoApi, anio = anioSeleccionadoApi) => {
     try {
       setCargandoPendientesApi(true);
       // Las dos fuentes nunca se mezclan en el mismo textarea
       setDocumentosCargados("");
       setMostrarPendientes(false);
-      const resp = await listarPendientesApi(5000, origen);
+      const resp = await listarPendientesApi(5000, origen, anio);
       if (!resp.ok) {
         toast.error(resp.error || "Error cargando solicitudes API");
         return;
       }
+
+      const anios = (resp.anios || []).filter((a) => Number.isFinite(a?.anio));
+      const grupos = (resp.grupos || []).map(normalizarGrupoApi);
+
+      setAniosApi(anios);
       setOrigenesApi(resp.origenes || []);
       setTotalApi(resp.total || 0);
-      setGruposApi(resp.grupos || []);
+      setTotalEnColaApi(resp.totalEnCola || 0);
+      setGruposApi(grupos);
       setMostrarPendientesApi(true);
 
-      if (resp.grupos?.length > 0) {
-        const primer = resp.grupos[0];
-        setDocumentosApi(primer.documentos.slice(0, POR_JOB).join("\n"));
-        setTipoDocumentoApi(primer.tipoDocumento);
-        setOrigenCargadoApi(primer.origen);
+      // El backend viejo no devuelve "anios": avisamos en vez de dejar la
+      // sección de años vacía sin explicación.
+      if (!Array.isArray(resp.anios)) {
+        toast.error(
+          "El servidor no devuelve los años: el backend atendiendo el puerto no está corriendo el código nuevo. Reinícialo y recarga.",
+          { duration: 8000 }
+        );
+      }
+
+      // Si el usuario ya tenía un grupo cargado, preferimos ese mismo para que
+      // siga haciendo los lotes de 90 sobre el mismo tipo; si ya no tiene
+      // trabajo, pasamos al siguiente que sí lo tenga.
+      const mismoGrupo =
+        grupoCargadoApi &&
+        grupos.find(
+          (g) =>
+            g.origen === grupoCargadoApi.origen &&
+            g.anio === grupoCargadoApi.anio &&
+            g.tipoDocumento === grupoCargadoApi.tipoDocumento &&
+            g.porProcesar > 0
+        );
+
+      const conTrabajo = mismoGrupo || grupos.find((g) => g.porProcesar > 0) || null;
+
+      if (conTrabajo) {
+        seleccionarGrupoApi(conTrabajo, true);
       } else {
         setDocumentosApi("");
         setTipoDocumentoApi("");
         setOrigenCargadoApi("");
+        setAnioCargadoApi(null);
+        setGrupoCargadoApi(null);
       }
 
-      toast.success(`${resp.total || 0} pendiente(s) de servicios API`, { duration: 5000 });
+      const totalEnCola = resp.totalEnCola || 0;
+      const porProcesar = Math.max((resp.total || 0) - totalEnCola, 0);
+      toast.success(
+        `${resp.total || 0} pendiente(s) · ${totalEnCola} en cola · ${porProcesar} por procesar`,
+        { duration: 5000 }
+      );
     } catch (err) {
       toast.error(err.response?.data?.error || "Error cargando solicitudes API");
     } finally {
@@ -183,22 +243,37 @@ export default function UbicabilidadPersonas() {
     }
   };
 
-  const cambiarOrigenApi = async (origen) => {
-    setOrigenSeleccionadoApi(origen);
-    await cargarSolicitudesApi(origen);
-  };
+  const etiquetaAnio = (anio) =>
+    !Number.isFinite(anio) ? "Sin año" : anio === 0 ? "Sin año" : String(anio);
 
-  const cargarGrupoApi = (grupo) => {
-    const totalGrupo = grupo.documentos.length;
-    const lote = grupo.documentos.slice(0, POR_JOB);
+  const seleccionarGrupoApi = (grupo, silencioso = false) => {
+    const porProcesar = grupo.porProcesar ?? grupo.documentos?.length ?? 0;
+    const lote = (grupo.documentos || []).slice(0, POR_JOB);
+
     setDocumentosApi(lote.join("\n"));
     setTipoDocumentoApi(grupo.tipoDocumento);
     setOrigenCargadoApi(grupo.origen);
-    toast.success(
-      totalGrupo > POR_JOB
-        ? `${lote.length} de ${totalGrupo} documento(s) cargados (lote de ${POR_JOB}). Vuelve a pulsar "Cargar" para el siguiente lote.`
-        : `${totalGrupo} documento(s) de "${grupo.origen}" cargado(s)`
-    );
+    setAnioCargadoApi(grupo.anio);
+    setGrupoCargadoApi(grupo);
+
+    if (!silencioso) {
+      toast.success(
+        porProcesar > POR_JOB
+          ? `${lote.length} de ${porProcesar} documento(s) cargados (lote de ${POR_JOB}). Pulsa "Crear trabajo" y vuelve a cargar para el siguiente lote.`
+          : `${porProcesar} documento(s) cargados`
+      );
+    }
+  };
+
+  const cambiarAnioApi = async (anio) => {
+    setAnioSeleccionadoApi(anio);
+    setOrigenSeleccionadoApi("");
+    await cargarSolicitudesApi("", anio);
+  };
+
+  const cambiarOrigenApi = async (origen) => {
+    setOrigenSeleccionadoApi(origen);
+    await cargarSolicitudesApi(origen, anioSeleccionadoApi);
   };
 
   const handleCrearJobDesdeApi = async () => {
@@ -209,7 +284,7 @@ export default function UbicabilidadPersonas() {
     }
     const lote = docs.slice(0, POR_JOB);
     if (docs.length > POR_JOB) {
-      toast(`Se envian los primeros ${POR_JOB} de ${docs.length} documento(s)`, { duration: 5000 });
+      toast(`Se envían los primeros ${POR_JOB} de ${docs.length} documento(s)`, { duration: 5000 });
     }
     try {
       setProcesando(true);
@@ -230,8 +305,8 @@ export default function UbicabilidadPersonas() {
 
       if (nuevosJobs.length > 0) {
         setJobsActivos((prev) => [...prev, ...nuevosJobs]);
-        setDocumentosApi("");
-        setMostrarPendientesApi(false);
+        // Recargar: los recién encolados dejan de aparecer como "por procesar"
+        await cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi);
       }
     } catch (err) {
       toast.error(err.response?.data?.error || "Error al crear trabajo");
@@ -243,13 +318,11 @@ export default function UbicabilidadPersonas() {
   const handleConfirmLimpiarApi = async () => {
     setConfirmLimpiarApiOpen(false);
     try {
-      const resp = await limpiarDocumentosApi(origenSeleccionadoApi);
+      const resp = await limpiarDocumentosApi(origenSeleccionadoApi, anioSeleccionadoApi);
       if (resp.ok) {
         toast.success(resp.mensaje, { duration: 6000 });
         setDocumentosApi("");
-        setGruposApi([]);
-        setMostrarPendientesApi(false);
-        await cargarSolicitudesApi(origenSeleccionadoApi);
+        await cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi);
       } else {
         toast.error(resp.error || "Error limpiando solicitudes API");
       }
@@ -507,7 +580,7 @@ export default function UbicabilidadPersonas() {
               <div className="hidden md:block w-px h-8 bg-slate-200" />
 
               <button
-                onClick={() => cargarSolicitudesApi(origenSeleccionadoApi)}
+                onClick={() => cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi)}
                 disabled={cargandoPendientesApi}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
                 style={{ backgroundColor: "#7c3aed" }}
@@ -538,7 +611,7 @@ export default function UbicabilidadPersonas() {
                 Solicitudes API pendientes ({totalApi})
               </h3>
               <p className="text-xs text-[#64748b] mt-1">
-                Registros ingresados por servicios externos. No incluye fotodetección ni Excel.
+                {totalEnColaApi} en cola · {Math.max(totalApi - totalEnColaApi, 0)} por procesar · lotes de {POR_JOB}
               </p>
             </div>
             <button
@@ -552,27 +625,65 @@ export default function UbicabilidadPersonas() {
             </button>
           </div>
 
-          {/* Resumen por origen */}
-          <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 mb-4">
-            {origenesApi.length === 0 ? (
-              <p className="px-4 py-3 text-xs text-[#94a3b8]">No hay solicitudes API pendientes.</p>
-            ) : (
-              <>
-                {origenesApi.map((o) => (
-                  <div key={o.origen} className="flex items-center justify-between px-4 py-2.5">
-                    <span className="text-xs font-medium text-[#1e293b]">{o.origen}</span>
-                    <span className="text-xs font-bold text-[#7c3aed]">{o.total.toLocaleString("es-CO")}</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50">
-                  <span className="text-xs font-bold text-[#1e293b]">TOTAL</span>
-                  <span className="text-xs font-bold text-[#1e293b]">{totalApi.toLocaleString("es-CO")}</span>
-                </div>
-              </>
-            )}
-          </div>
+          {/* 1) Año de los comparendos */}
+          <p className="text-xs font-semibold text-[#1e293b] mb-0.5">
+            1. Selecciona el año a consultar
+          </p>
+          <p className="text-[11px] text-[#64748b] mb-2">
+            Año de los comparendos que motivan la solicitud
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+            <button
+              onClick={() => cambiarAnioApi("")}
+              className={`p-4 rounded-xl border transition-colors text-left ${
+                anioSeleccionadoApi === ""
+                  ? "border-[#7c3aed] bg-violet-50"
+                  : "border-slate-200 hover:border-[#7c3aed] hover:bg-violet-50/50"
+              }`}
+            >
+              <p className="text-lg font-bold text-[#1e293b]">Todos</p>
+              <p className="text-xs text-[#64748b] mt-0.5">
+                {totalApi.toLocaleString("es-CO")} pendiente(s)
+              </p>
+            </button>
 
-          {/* Filtro por origen */}
+            {aniosApi.map((a) => {
+              const activo = anioSeleccionadoApi === String(a.anio);
+              return (
+                <button
+                  key={a.anio}
+                  onClick={() => cambiarAnioApi(String(a.anio))}
+                  className={`p-4 rounded-xl border transition-colors text-left ${
+                    activo
+                      ? "border-[#7c3aed] bg-violet-50"
+                      : "border-slate-200 hover:border-[#7c3aed] hover:bg-violet-50/50"
+                  }`}
+                >
+                  <p className="text-lg font-bold text-[#7c3aed]">{etiquetaAnio(a.anio)}</p>
+                  <p className="text-xs text-[#64748b] mt-0.5">
+                    {a.total.toLocaleString("es-CO")} pendiente(s)
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {aniosApi.length === 0 && (
+            <p className="text-xs text-amber-600 -mt-2 mb-5">
+              No hay años registrados. O las solicitudes llegaron sin <code>anio</code>, o
+              el servidor aún corre el código viejo.
+            </p>
+          )}
+          {aniosApi.some((a) => a.anio === 0) && aniosApi.length > 1 && (
+            <p className="text-[11px] text-[#64748b] -mt-4 mb-5">
+              <strong>«Sin año»</strong> son solicitudes que llegaron antes de que el
+              servicio enviara el año. Si vuelves a enviar esas personas desde
+              contravenciones con su <code>anio</code>, se actualizan solas y dejan de
+              aparecer aquí.
+            </p>
+          )}
+
+          {/* 2) Origen */}
+          <p className="text-xs font-semibold text-[#1e293b] mb-2">2. Servicio que envió la solicitud</p>
           <div className="flex flex-wrap gap-2 mb-4">
             <button
               onClick={() => cambiarOrigenApi("")}
@@ -599,25 +710,50 @@ export default function UbicabilidadPersonas() {
             ))}
           </div>
 
-          {/* Grupos por origen + tipo de documento */}
+          {/* 3) Tipo de documento */}
+          <p className="text-xs font-semibold text-[#1e293b] mb-2">3. Tipo de documento</p>
           {gruposApi.length === 0 ? (
-            <p className="text-sm text-[#94a3b8] text-center py-4">No hay grupos para mostrar.</p>
+            <p className="text-sm text-[#94a3b8] text-center py-4">
+              No hay grupos para mostrar con los filtros actuales.
+            </p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {gruposApi.map((grupo) => (
-                <button
-                  key={`${grupo.origen}-${grupo.tipoDocumento}`}
-                  onClick={() => cargarGrupoApi(grupo)}
-                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-[#7c3aed] hover:bg-violet-50/50 transition-colors text-left"
-                >
-                  <div>
-                    <p className="text-xs font-semibold text-[#7c3aed]">{grupo.origen}</p>
-                    <p className="text-sm font-semibold text-[#1e293b]">{grupo.tipoDocumento}</p>
-                    <p className="text-xs text-[#64748b]">{grupo.count} documento(s)</p>
-                  </div>
-                  <Upload className="w-4 h-4 text-[#7c3aed]" />
-                </button>
-              ))}
+              {gruposApi.map((grupo) => {
+                const seleccionado =
+                  grupoCargadoApi &&
+                  grupoCargadoApi.origen === grupo.origen &&
+                  grupoCargadoApi.anio === grupo.anio &&
+                  grupoCargadoApi.tipoDocumento === grupo.tipoDocumento;
+
+                const sinTrabajo = grupo.porProcesar === 0;
+
+                return (
+                  <button
+                    key={`${grupo.origen}-${grupo.anio}-${grupo.tipoDocumento}`}
+                    onClick={() => seleccionarGrupoApi(grupo)}
+                    disabled={sinTrabajo}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-colors text-left disabled:cursor-not-allowed disabled:opacity-50 ${
+                      seleccionado
+                        ? "border-[#7c3aed] bg-violet-50"
+                        : "border-slate-200 hover:border-[#7c3aed] hover:bg-violet-50/50"
+                    }`}
+                  >
+                    <div>
+                      <p className="text-xs font-semibold text-[#7c3aed]">
+                        {grupo.origen}
+                        {grupo.anio != null ? ` · ${etiquetaAnio(grupo.anio)}` : ""}
+                      </p>
+                      <p className="text-sm font-semibold text-[#1e293b]">{grupo.tipoDocumento}</p>
+                      <p className="text-xs text-[#64748b]">
+                        {sinTrabajo
+                          ? "Todo en cola"
+                          : `${grupo.porProcesar} por procesar · ${grupo.enCola} en cola`}
+                      </p>
+                    </div>
+                    <Upload className="w-4 h-4 text-[#7c3aed]" />
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -631,7 +767,7 @@ export default function UbicabilidadPersonas() {
               Limpiar solicitudes API
             </button>
             <span className="text-xs text-[#94a3b8]">
-              Los documentos cargados se envían al mismo worker, en jobs de máximo 90.
+              Solo se envían {POR_JOB} documentos por trabajo. Al crearlo, los contadores se actualizan solos.
             </span>
           </div>
         </div>
@@ -777,7 +913,12 @@ export default function UbicabilidadPersonas() {
           <div className="flex items-center gap-2 mb-4">
             <PlugZap className="w-5 h-5 text-[#7c3aed]" />
             <h3 className="text-sm font-semibold text-[#1e293b]">
-              Solicitudes API — {origenCargadoApi || "varios orígenes"} · {tipoDocumentoApi || "sin tipo"}
+              Solicitudes API — {origenCargadoApi || "varios orígenes"}
+              {anioCargadoApi != null ? ` · ${anioCargadoApi === 0 ? "sin año" : anioCargadoApi}` : ""}
+              {tipoDocumentoApi ? ` · ${tipoDocumentoApi}` : ""}
+              {grupoCargadoApi?.porProcesar
+                ? ` · lote de ${Math.min(POR_JOB, grupoCargadoApi.porProcesar)} de ${grupoCargadoApi.porProcesar}`
+                : ""}
             </h3>
           </div>
           <textarea

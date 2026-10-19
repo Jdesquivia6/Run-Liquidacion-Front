@@ -50,15 +50,19 @@ export async function listarOrigenesApi() {
   return response.data;
 }
 
-export async function listarPendientesApi(limit = 1000, origen = "") {
+export async function listarPendientesApi(limit = 1000, origen = "", anio = "") {
   const params = new URLSearchParams({ limit });
   if (origen) params.append("origen", origen);
+  if (anio) params.append("anio", anio);
   const response = await axios.get(`${API}/pendientes-api?${params.toString()}`);
   return response.data;
 }
 
-export async function limpiarDocumentosApi(origen = "") {
-  const params = origen ? `?origen=${encodeURIComponent(origen)}` : "";
-  const response = await axios.delete(`${API}/limpiar-api${params}`);
+export async function limpiarDocumentosApi(origen = "", anio = "") {
+  const params = new URLSearchParams();
+  if (origen) params.append("origen", origen);
+  if (anio) params.append("anio", anio);
+  const qs = params.toString();
+  const response = await axios.delete(`${API}/limpiar-api${qs ? `?${qs}` : ""}`);
   return response.data;
 }
