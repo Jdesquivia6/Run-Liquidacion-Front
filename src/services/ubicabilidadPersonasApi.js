@@ -66,3 +66,10 @@ export async function limpiarDocumentosApi(origen = "", anio = "") {
   const response = await axios.delete(`${API}/limpiar-api${qs ? `?${qs}` : ""}`);
   return response.data;
 }
+
+// ── Envío a CONTRAVENCIONES ──
+// Envía al enriquecer de Contravenciones los resultados del scraping de un año.
+export async function enviarAnioExterno(anio, origen = "") {
+  const response = await axios.post(`${API}/enviar-externo`, { anio, origen });
+  return response.data;
+}

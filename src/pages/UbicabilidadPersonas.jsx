@@ -11,12 +11,13 @@ import {
   listarHistorial,
   limpiarDocumentos,
   listarPendientesApi,
-  limpiarDocumentosApi
+  limpiarDocumentosApi,
+  enviarAnioExterno
 } from "../services/ubicabilidadPersonasApi";
 import { crearJob } from "../services/workerJobsApi";
 import {
   Upload, FileText, CheckCircle2, AlertCircle,
-  Loader2, Search, MapPin, Eye, X, Database, Download, Trash2, PlugZap
+  Loader2, Search, MapPin, Eye, X, Database, Download, Trash2, PlugZap, Send
 } from "lucide-react";
 import DocumentosSwiper from "../components/DocumentosSwiper";
 import JobProgress from "../components/JobProgress";
@@ -67,6 +68,10 @@ export default function UbicabilidadPersonas() {
   const [anioCargadoApi, setAnioCargadoApi] = useState(null);
   const [grupoCargadoApi, setGrupoCargadoApi] = useState(null);
   const [confirmLimpiarApiOpen, setConfirmLimpiarApiOpen] = useState(false);
+
+  // Envío de resultados del scraping a CONTRAVENCIONES
+  const [anioEnviandoApi, setAnioEnviandoApi] = useState(null);
+  const [confirmEnvioAnioApi, setConfirmEnvioAnioApi] = useState(null);
 
   // Historial de consultados
   const [historial, setHistorial] = useState([]);
@@ -229,6 +234,59 @@ export default function UbicabilidadPersonas() {
 
   const etiquetaAnio = (anio) =>
     !Number.isFinite(anio) ? "Sin año" : anio === 0 ? "Sin año" : String(anio);
+
+  // Solo refresca contadores; nunca toca el textarea cargado.
+  const refrescarContadoresApi = async () => {
+    try {
+      const resp = await listarPendientesApi(5000, origenSeleccionadoApi, anioSeleccionadoApi);
+      if (!resp.ok) return;
+      setAniosApi((resp.anios || []).filter((a) => Number.isFinite(a?.anio)));
+      setOrigenesApi(resp.origenes || []);
+      setTotalApi(resp.total || 0);
+      setTotalEnColaApi(resp.totalEnCola || 0);
+      setGruposApi((resp.grupos || []).map(normalizarGrupoApi));
+    } catch {
+      // silencioso: el envío ya se reportó por toast
+    }
+  };
+
+  const handleConfirmEnvioAnio = async () => {
+    const destino = confirmEnvioAnioApi;
+    setConfirmEnvioAnioApi(null);
+    if (!destino) return;
+
+    setAnioEnviandoApi(destino.anio);
+    try {
+      const resp = await enviarAnioExterno(destino.anio, origenSeleccionadoApi);
+
+      if (resp.exitosas > 0 || resp.yaExistian > 0) {
+        toast.success(
+          `Año ${etiquetaAnio(destino.anio)}: ${resp.exitosas} enviada(s) · ` +
+            `${resp.yaExistian} ya existían · ${resp.enviadas} en total`,
+          { duration: 8000 }
+        );
+      }
+      if (resp.fallidas > 0) {
+        toast.error(`${resp.fallidas} no se pudieron enviar.`, { duration: 8000 });
+      }
+      if (resp.noSoportadas > 0) {
+        toast(
+          `${resp.noSoportadas} no se enviaron por tipo de documento no soportado ` +
+            `(${Object.keys(resp.porTipoNoSoportado || {}).join(", ")}).`,
+          { icon: "⚠️", duration: 9000 }
+        );
+      }
+      if (resp.mensaje) toast(resp.mensaje);
+
+      await refrescarContadoresApi();
+    } catch (err) {
+      toast.error(err.response?.data?.error || err.message || "No se pudo enviar a contravenciones", {
+        duration: 8000
+      });
+    } finally {
+      setAnioEnviandoApi(null);
+    }
+  };
 
   const seleccionarGrupoApi = (grupo) => {
     const porProcesar = grupo.porProcesar ?? grupo.documentos?.length ?? 0;
@@ -650,21 +708,55 @@ export default function UbicabilidadPersonas() {
 
             {aniosApi.map((a) => {
               const activo = anioSeleccionadoApi === String(a.anio);
+              const enviando = anioEnviandoApi === a.anio;
+              const conDireccion = a.conDireccion || 0;
+              const enviadas = a.enviadas || 0;
+              const porEnviar = Math.max(conDireccion - enviadas, 0);
               return (
-                <button
-                  key={a.anio}
-                  onClick={() => cambiarAnioApi(String(a.anio))}
-                  className={`p-4 rounded-xl border-2 transition-all text-left ${
-                    activo
-                      ? "border-[#7c3aed] bg-violet-100 ring-2 ring-[#7c3aed]/30"
-                      : "border-slate-200 bg-white hover:border-[#7c3aed] hover:bg-violet-50/60"
-                  }`}
-                >
-                  <p className="text-lg font-bold text-[#7c3aed]">{etiquetaAnio(a.anio)}</p>
-                  <p className="text-xs text-[#64748b] mt-0.5">
-                    {a.total.toLocaleString("es-CO")} pendiente(s)
-                  </p>
-                </button>
+                <div key={a.anio} className="flex flex-col gap-1.5">
+                  <button
+                    onClick={() => cambiarAnioApi(String(a.anio))}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      activo
+                        ? "border-[#7c3aed] bg-violet-100 ring-2 ring-[#7c3aed]/30"
+                        : "border-slate-200 bg-white hover:border-[#7c3aed] hover:bg-violet-50/60"
+                    }`}
+                  >
+                    <p className="text-lg font-bold text-[#7c3aed]">{etiquetaAnio(a.anio)}</p>
+                    <p className="text-xs text-[#64748b] mt-0.5">
+                      {a.total.toLocaleString("es-CO")} pendiente(s)
+                    </p>
+                    {conDireccion > 0 && (
+                      <span
+                        className={`mt-1.5 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-bold ${
+                          porEnviar > 0
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}
+                      >
+                        {enviadas}/{conDireccion} enviada(s)
+                      </span>
+                    )}
+                  </button>
+
+                  {conDireccion > 0 && (
+                    <button
+                      type="button"
+                      disabled={enviando}
+                      onClick={() =>
+                        setConfirmEnvioAnioApi({ anio: a.anio, conDireccion, enviadas, porEnviar })
+                      }
+                      className="flex items-center justify-center gap-1.5 rounded-lg border border-[#7c3aed] bg-white px-2 py-1.5 text-[11px] font-bold text-[#7c3aed] transition-colors hover:bg-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {enviando ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Send className="h-3.5 w-3.5" />
+                      )}
+                      {enviando ? "Enviando…" : "Enviar a contravenciones"}
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -1230,6 +1322,24 @@ export default function UbicabilidadPersonas() {
         confirmText="Eliminar"
         onConfirm={handleConfirmLimpiarApi}
         onCancel={() => setConfirmLimpiarApiOpen(false)}
+      />
+
+      <ConfirmModal
+        open={!!confirmEnvioAnioApi}
+        title="Enviar a contravenciones"
+        message={
+          confirmEnvioAnioApi
+            ? `Se enviarán al servicio de enriquecimiento de Contravenciones las ` +
+              `${confirmEnvioAnioApi.conDireccion.toLocaleString("es-CO")} persona(s) del año ` +
+              `${etiquetaAnio(confirmEnvioAnioApi.anio)} que ya tienen dirección ` +
+              `(${confirmEnvioAnioApi.enviadas.toLocaleString("es-CO")} ya enviada(s), ` +
+              `${confirmEnvioAnioApi.porEnviar.toLocaleString("es-CO")} por enviar). ` +
+              `Se reenvían también las ya enviadas, por si cambió su dirección.`
+            : ""
+        }
+        confirmText="Enviar"
+        onConfirm={handleConfirmEnvioAnio}
+        onCancel={() => setConfirmEnvioAnioApi(null)}
       />
     </div>
   );
