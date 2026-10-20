@@ -205,30 +205,14 @@ export default function UbicabilidadPersonas() {
         );
       }
 
-      // Si el usuario ya tenía un grupo cargado, preferimos ese mismo para que
-      // siga haciendo los lotes de 90 sobre el mismo tipo; si ya no tiene
-      // trabajo, pasamos al siguiente que sí lo tenga.
-      const mismoGrupo =
-        grupoCargadoApi &&
-        grupos.find(
-          (g) =>
-            g.origen === grupoCargadoApi.origen &&
-            g.anio === grupoCargadoApi.anio &&
-            g.tipoDocumento === grupoCargadoApi.tipoDocumento &&
-            g.porProcesar > 0
-        );
-
-      const conTrabajo = mismoGrupo || grupos.find((g) => g.porProcesar > 0) || null;
-
-      if (conTrabajo) {
-        seleccionarGrupoApi(conTrabajo, true);
-      } else {
-        setDocumentosApi("");
-        setTipoDocumentoApi("");
-        setOrigenCargadoApi("");
-        setAnioCargadoApi(null);
-        setGrupoCargadoApi(null);
-      }
+      // Recargar SOLO refresca los contadores: nunca abre la ventana de
+      // creación por su cuenta. El lote se carga dando clic en una tarjeta
+      // de grupo, así no se puede encolar otro trabajo sin querer.
+      setDocumentosApi("");
+      setTipoDocumentoApi("");
+      setOrigenCargadoApi("");
+      setAnioCargadoApi(null);
+      setGrupoCargadoApi(null);
 
       const totalEnCola = resp.totalEnCola || 0;
       const porProcesar = Math.max((resp.total || 0) - totalEnCola, 0);
@@ -246,7 +230,7 @@ export default function UbicabilidadPersonas() {
   const etiquetaAnio = (anio) =>
     !Number.isFinite(anio) ? "Sin año" : anio === 0 ? "Sin año" : String(anio);
 
-  const seleccionarGrupoApi = (grupo, silencioso = false) => {
+  const seleccionarGrupoApi = (grupo) => {
     const porProcesar = grupo.porProcesar ?? grupo.documentos?.length ?? 0;
     const lote = (grupo.documentos || []).slice(0, POR_JOB);
 
@@ -256,13 +240,11 @@ export default function UbicabilidadPersonas() {
     setAnioCargadoApi(grupo.anio);
     setGrupoCargadoApi(grupo);
 
-    if (!silencioso) {
-      toast.success(
-        porProcesar > POR_JOB
-          ? `${lote.length} de ${porProcesar} documento(s) cargados (lote de ${POR_JOB}). Pulsa "Crear trabajo" y vuelve a cargar para el siguiente lote.`
-          : `${porProcesar} documento(s) cargados`
-      );
-    }
+    toast.success(
+      porProcesar > POR_JOB
+        ? `${lote.length} de ${porProcesar} documento(s) cargados (lote de ${POR_JOB}). Pulsa "Crear Job": la ventana se cierra sola y vuelves a la tarjeta para el siguiente lote.`
+        : `${porProcesar} documento(s) cargados`
+    );
   };
 
   const cambiarAnioApi = async (anio) => {
@@ -295,16 +277,28 @@ export default function UbicabilidadPersonas() {
       const resp = await crearJob("ubicabilidad-personas", items);
 
       const nuevosJobs = [];
+      const siguiente = `Da clic en una tarjeta para cargar el siguiente lote de ${POR_JOB}.`;
       if (resp.jobs && resp.jobs.length > 0) {
         nuevosJobs.push(...resp.jobs.map((j) => j.id_job));
-        toast.success(resp.message || `Se crearon ${resp.jobs.length} trabajos`);
+        toast.success(
+          `${resp.message || `Se crearon ${resp.jobs.length} trabajos`} ${siguiente}`,
+          { duration: 7000 }
+        );
       } else if (resp.job?.id_job) {
         nuevosJobs.push(resp.job.id_job);
-        toast.success(`Trabajo creado con ${items.length} documento(s)`);
+        toast.success(
+          `${resp.message || `Trabajo creado con ${items.length} documento(s)`} ${siguiente}`,
+          { duration: 7000 }
+        );
       }
 
       if (nuevosJobs.length > 0) {
         setJobsActivos((prev) => [...prev, ...nuevosJobs]);
+        // La ventana se cierra de inmediato: si quedara abierta, un segundo
+        // clic en "Crear Job" volvería a encolar el mismo lote.
+        setDocumentosApi("");
+        setTipoDocumentoApi("");
+        setGrupoCargadoApi(null);
         // Recargar: los recién encolados dejan de aparecer como "por procesar"
         await cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi);
       }
@@ -604,11 +598,14 @@ export default function UbicabilidadPersonas() {
 
       {/* ── Panel de solicitudes API pendientes ── */}
       {mostrarPendientesApi && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
+        <div className="rounded-2xl border-2 border-violet-300 shadow-md bg-gradient-to-br from-violet-50 via-white to-white p-5 md:p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="text-sm font-semibold text-[#1e293b]">
-                Solicitudes API pendientes ({totalApi})
+              <h3 className="flex items-center gap-2 text-base font-bold text-[#4c1d95]">
+                Solicitudes API pendientes
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#7c3aed] text-white">
+                  {totalApi}
+                </span>
               </h3>
               <p className="text-xs text-[#64748b] mt-1">
                 {totalEnColaApi} en cola · {Math.max(totalApi - totalEnColaApi, 0)} por procesar · lotes de {POR_JOB}
@@ -618,8 +615,12 @@ export default function UbicabilidadPersonas() {
               onClick={() => {
                 setMostrarPendientesApi(false);
                 setDocumentosApi("");
+                setTipoDocumentoApi("");
+                setOrigenCargadoApi("");
+                setAnioCargadoApi(null);
+                setGrupoCargadoApi(null);
               }}
-              className="text-xs text-[#64748b] hover:text-[#1e293b]"
+              className="text-xs font-semibold text-[#64748b] hover:text-[#7c3aed] transition-colors"
             >
               Cerrar
             </button>
@@ -635,10 +636,10 @@ export default function UbicabilidadPersonas() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
             <button
               onClick={() => cambiarAnioApi("")}
-              className={`p-4 rounded-xl border transition-colors text-left ${
+              className={`p-4 rounded-xl border-2 transition-all text-left ${
                 anioSeleccionadoApi === ""
-                  ? "border-[#7c3aed] bg-violet-50"
-                  : "border-slate-200 hover:border-[#7c3aed] hover:bg-violet-50/50"
+                  ? "border-[#7c3aed] bg-violet-100 ring-2 ring-[#7c3aed]/30"
+                  : "border-slate-200 bg-white hover:border-[#7c3aed] hover:bg-violet-50/60"
               }`}
             >
               <p className="text-lg font-bold text-[#1e293b]">Todos</p>
@@ -653,10 +654,10 @@ export default function UbicabilidadPersonas() {
                 <button
                   key={a.anio}
                   onClick={() => cambiarAnioApi(String(a.anio))}
-                  className={`p-4 rounded-xl border transition-colors text-left ${
+                  className={`p-4 rounded-xl border-2 transition-all text-left ${
                     activo
-                      ? "border-[#7c3aed] bg-violet-50"
-                      : "border-slate-200 hover:border-[#7c3aed] hover:bg-violet-50/50"
+                      ? "border-[#7c3aed] bg-violet-100 ring-2 ring-[#7c3aed]/30"
+                      : "border-slate-200 bg-white hover:border-[#7c3aed] hover:bg-violet-50/60"
                   }`}
                 >
                   <p className="text-lg font-bold text-[#7c3aed]">{etiquetaAnio(a.anio)}</p>
@@ -732,25 +733,47 @@ export default function UbicabilidadPersonas() {
                     key={`${grupo.origen}-${grupo.anio}-${grupo.tipoDocumento}`}
                     onClick={() => seleccionarGrupoApi(grupo)}
                     disabled={sinTrabajo}
-                    className={`flex items-center justify-between p-3 rounded-xl border transition-colors text-left disabled:cursor-not-allowed disabled:opacity-50 ${
+                    className={`group flex items-center justify-between gap-3 p-4 rounded-xl border-2 transition-all text-left disabled:cursor-not-allowed disabled:opacity-50 ${
                       seleccionado
-                        ? "border-[#7c3aed] bg-violet-50"
-                        : "border-slate-200 hover:border-[#7c3aed] hover:bg-violet-50/50"
+                        ? "border-[#7c3aed] bg-violet-100 ring-2 ring-[#7c3aed]/30"
+                        : "border-slate-200 bg-white hover:border-[#7c3aed] hover:bg-violet-50/60 hover:shadow-sm"
                     }`}
                   >
-                    <div>
-                      <p className="text-xs font-semibold text-[#7c3aed]">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-[#7c3aed]">
                         {grupo.origen}
                         {grupo.anio != null ? ` · ${etiquetaAnio(grupo.anio)}` : ""}
                       </p>
-                      <p className="text-sm font-semibold text-[#1e293b]">{grupo.tipoDocumento}</p>
-                      <p className="text-xs text-[#64748b]">
-                        {sinTrabajo
-                          ? "Todo en cola"
-                          : `${grupo.porProcesar} por procesar · ${grupo.enCola} en cola`}
+                      <p className="text-sm font-bold text-[#1e293b] mt-0.5">
+                        {grupo.tipoDocumento}
                       </p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        {sinTrabajo ? (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-600">
+                            Todo en cola
+                          </span>
+                        ) : (
+                          <>
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700">
+                              {grupo.porProcesar} por procesar
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500">
+                              {grupo.enCola} en cola
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <Upload className="w-4 h-4 text-[#7c3aed]" />
+                    <span
+                      className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                        sinTrabajo
+                          ? "bg-slate-100 text-slate-400"
+                          : "bg-[#7c3aed] text-white group-hover:bg-[#6d28d9]"
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Cargar
+                    </span>
                   </button>
                 );
               })}
@@ -909,17 +932,21 @@ export default function UbicabilidadPersonas() {
 
       {/* ── Formulario documentos desde Servicios API ── */}
       {documentosApi && (
-        <div className="bg-white rounded-2xl border border-violet-200 shadow-sm p-5 md:p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <PlugZap className="w-5 h-5 text-[#7c3aed]" />
-            <h3 className="text-sm font-semibold text-[#1e293b]">
-              Solicitudes API — {origenCargadoApi || "varios orígenes"}
-              {anioCargadoApi != null ? ` · ${anioCargadoApi === 0 ? "sin año" : anioCargadoApi}` : ""}
-              {tipoDocumentoApi ? ` · ${tipoDocumentoApi}` : ""}
-              {grupoCargadoApi?.porProcesar
-                ? ` · lote de ${Math.min(POR_JOB, grupoCargadoApi.porProcesar)} de ${grupoCargadoApi.porProcesar}`
-                : ""}
-            </h3>
+        <div className="bg-white rounded-2xl border-2 border-[#7c3aed] shadow-lg p-5 md:p-6">
+          <div className="flex items-center justify-between gap-3 mb-4 p-3 rounded-xl bg-[#7c3aed] text-white">
+            <div className="flex items-center gap-2 min-w-0">
+              <PlugZap className="w-5 h-5 shrink-0" />
+              <h3 className="text-sm font-bold truncate">
+                Lote listo — {origenCargadoApi || "varios orígenes"}
+                {anioCargadoApi != null ? ` · ${anioCargadoApi === 0 ? "sin año" : anioCargadoApi}` : ""}
+                {tipoDocumentoApi ? ` · ${tipoDocumentoApi}` : ""}
+              </h3>
+            </div>
+            {grupoCargadoApi?.porProcesar ? (
+              <span className="shrink-0 px-2.5 py-1 rounded-lg bg-white/20 text-xs font-bold">
+                {Math.min(POR_JOB, grupoCargadoApi.porProcesar)} de {grupoCargadoApi.porProcesar}
+              </span>
+            ) : null}
           </div>
           <textarea
             value={documentosApi}
@@ -935,19 +962,30 @@ export default function UbicabilidadPersonas() {
             <button
               onClick={handleCrearJobDesdeApi}
               disabled={procesando || !documentosApi.trim()}
-              className="flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-base font-bold shadow-md transition-colors disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed"
             >
-              {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              {procesando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
               {procesando ? "Creando trabajo..." : "Crear Job"}
             </button>
             <button
-              onClick={() => { setDocumentosApi(""); setMostrarPendientesApi(false); }}
+              onClick={() => {
+                setDocumentosApi("");
+                setMostrarPendientesApi(false);
+                setTipoDocumentoApi("");
+                setOrigenCargadoApi("");
+                setAnioCargadoApi(null);
+                setGrupoCargadoApi(null);
+              }}
               className="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-[#64748b] rounded-xl text-sm font-semibold transition-colors"
             >
               <X className="w-4 h-4" />
               Cancelar
             </button>
           </div>
+          <p className="text-[11px] text-[#64748b] mt-3">
+            Al crearlo la ventana se cierra sola. Da clic en la tarjeta del grupo
+            para cargar el siguiente lote de {POR_JOB}.
+          </p>
         </div>
       )}
 
