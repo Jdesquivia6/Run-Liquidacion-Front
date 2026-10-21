@@ -73,3 +73,14 @@ export async function enviarAnioExterno(anio, origen = "") {
   const response = await axios.post(`${API}/enviar-externo`, { anio, origen });
   return response.data;
 }
+
+// Detalle de las respuestas que CONTRAVENCIONES rechazó, para ver el motivo
+// y poder reintentar el envío.
+export async function obtenerErroresEnvio(anio = "", origen = "") {
+  const params = new URLSearchParams();
+  if (anio !== "" && anio !== null && anio !== undefined) params.append("anio", anio);
+  if (origen) params.append("origen", origen);
+  const qs = params.toString();
+  const response = await axios.get(`${API}/errores-envio${qs ? `?${qs}` : ""}`);
+  return response.data;
+}

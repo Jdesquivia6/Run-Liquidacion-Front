@@ -12,17 +12,20 @@ import {
   limpiarDocumentos,
   listarPendientesApi,
   limpiarDocumentosApi,
-  enviarAnioExterno
+  enviarAnioExterno,
+  obtenerErroresEnvio
 } from "../services/ubicabilidadPersonasApi";
 import { crearJob } from "../services/workerJobsApi";
 import {
   Upload, FileText, CheckCircle2, AlertCircle,
   Loader2, Search, MapPin, Eye, X, Database, Download, Trash2, PlugZap, Send,
-  CalendarDays, Layers3, LayoutGrid, RefreshCw, Info, IdCard, Check
+  CalendarDays, Layers3, LayoutGrid, RefreshCw, Info, IdCard, Check,
+  ChevronDown, AlertTriangle
 } from "lucide-react";
 import DocumentosSwiper from "../components/DocumentosSwiper";
 import JobProgress from "../components/JobProgress";
 import ConfirmModal from "../components/ConfirmModal";
+import ErroresEnvioModal from "../components/ErroresEnvioModal";
 
 const POR_JOB = 90;
 
@@ -73,6 +76,14 @@ export default function UbicabilidadPersonas() {
   // Envío de resultados del scraping a CONTRAVENCIONES
   const [anioEnviandoApi, setAnioEnviandoApi] = useState(null);
   const [confirmEnvioAnioApi, setConfirmEnvioAnioApi] = useState(null);
+
+  // Respuestas rechazadas por CONTRAVENCIONES (detalle + reenvío)
+  const [mostrarCompletados, setMostrarCompletados] = useState(false);
+  const [erroresAbiertos, setErroresAbiertos] = useState(false);
+  const [erroresCargando, setErroresCargando] = useState(false);
+  const [erroresLista, setErroresLista] = useState([]);
+  const [erroresError, setErroresError] = useState(null);
+  const [erroresContexto, setErroresContexto] = useState({ anio: "", etiqueta: "" });
 
   // Historial de consultados
   const [historial, setHistorial] = useState([]);
@@ -579,10 +590,136 @@ export default function UbicabilidadPersonas() {
   const anioActivoApi = aniosApi.find(
     (item) => String(item.anio) === anioSeleccionadoApi
   );
-  const conDireccionApi = Number(anioActivoApi?.conDireccion) || 0;
-  const enviadasApi = Number(anioActivoApi?.enviadas) || 0;
+
+  // Con "Todos" seleccionado el panel muestra los totales consolidados de todos
+  // los años; el envío sigue exigiendo un año concreto.
+  const totalesConsolidados = aniosApi.reduce(
+    (acc, item) => ({
+      conDireccion: acc.conDireccion + (Number(item.conDireccion) || 0),
+      enviadas: acc.enviadas + (Number(item.enviadas) || 0),
+      conError: acc.conError + (Number(item.conError) || 0),
+      porProcesar: acc.porProcesar + (Number(item.total) || 0)
+    }),
+    { conDireccion: 0, enviadas: 0, conError: 0, porProcesar: 0 }
+  );
+
+  const conDireccionApi = anioActivoApi
+    ? Number(anioActivoApi.conDireccion) || 0
+    : totalesConsolidados.conDireccion;
+  const enviadasApi = anioActivoApi
+    ? Number(anioActivoApi.enviadas) || 0
+    : totalesConsolidados.enviadas;
+  const conErrorApi = anioActivoApi
+    ? Number(anioActivoApi.conError) || 0
+    : totalesConsolidados.conError;
   const porEnviarApi = Math.max(conDireccionApi - enviadasApi, 0);
   const enviandoRespuestaApi = anioEnviandoApi !== null;
+
+  // Un año sale de la lista principal cuando no queda nada por procesar ni por
+  // enviar y no quedó ninguna respuesta rechazada. Si luego recibe trabajo
+  // nuevo, vuelve automáticamente a la sección principal.
+  const esCompletado = (item) =>
+    (Number(item.total) || 0) === 0 &&
+    (Number(item.conError) || 0) === 0 &&
+    (Number(item.enviadas) || 0) >= (Number(item.conDireccion) || 0);
+
+  const aniosActivosApi = aniosApi.filter((item) => !esCompletado(item));
+  const aniosCompletadosApi = aniosApi.filter(esCompletado);
+
+  const abrirErroresEnvio = async (anioForzado) => {
+    const anioCtx = anioForzado !== undefined ? anioForzado : anioSeleccionadoApi;
+    setErroresAbiertos(true);
+    setErroresCargando(true);
+    setErroresError(null);
+    setErroresLista([]);
+    setErroresContexto({
+      anio: anioCtx,
+      origen: origenSeleccionadoApi,
+      etiqueta: anioCtx === "" ? "Todos los años" : `Año ${etiquetaAnio(Number(anioCtx))}`
+    });
+    try {
+      const resp = await obtenerErroresEnvio(anioCtx, origenSeleccionadoApi);
+      if (!resp.ok) throw new Error(resp.error || "No se pudo cargar el detalle");
+      setErroresLista(resp.errores || []);
+    } catch (err) {
+      setErroresError(
+        err.response?.data?.error || err.message || "Error cargando las respuestas con error"
+      );
+    } finally {
+      setErroresCargando(false);
+    }
+  };
+
+  // Reintento desde el modal: abre el MISMO flujo de confirmación que el
+  // botón principal, así no se duplica la lógica de envío.
+  const reintentarDesdeErrores = () => {
+    const anioCtx = erroresContexto?.anio;
+    setErroresAbiertos(false);
+    if (anioCtx === "" || anioCtx === undefined || anioCtx === null) return;
+    const item = aniosApi.find((x) => String(x.anio) === String(anioCtx));
+    const conDireccion = Number(item?.conDireccion) || 0;
+    const enviadas = Number(item?.enviadas) || 0;
+    setConfirmEnvioAnioApi({
+      anio: item ? item.anio : Number(anioCtx),
+      conDireccion,
+      enviadas,
+      porEnviar: Math.max(conDireccion - enviadas, 0)
+    });
+  };
+
+  // Tarjeta de año compartida por la lista principal y por "Completados".
+  const tarjetaAnio = (item, completado = false) => {
+    const seleccionado = anioSeleccionadoApi === String(item.anio);
+    const total = Number(item.total) || 0;
+    const conDireccion = Number(item.conDireccion) || 0;
+    const enviadas = Number(item.enviadas) || 0;
+    const conError = Number(item.conError) || 0;
+
+    const borde = seleccionado
+      ? "border-[#7C3AED] bg-[#F5EEFF] ring-2 ring-[#7C3AED]/20 shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]"
+      : completado
+        ? "border-emerald-200 bg-emerald-50/60 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm"
+        : "border-slate-200 bg-white hover:border-[#C4B5FD] hover:bg-[#F5EEFF]/40 hover:shadow-sm";
+
+    return (
+      <button
+        key={item.anio}
+        type="button"
+        onClick={() => cambiarAnioApi(String(item.anio))}
+        disabled={cargandoPendientesApi}
+        aria-pressed={seleccionado}
+        className={`relative flex min-h-[108px] flex-col justify-center gap-1 rounded-xl border-2 p-3.5 text-left transition-all disabled:opacity-60 ${borde}`}
+      >
+        {seleccionado && <Check className="absolute right-3 top-3 h-4 w-4 text-runt-primary-dark" />}
+        <span className="flex items-center gap-2">
+          {completado ? (
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+          ) : (
+            <CalendarDays className="h-5 w-5 shrink-0 text-[#7C3AED]" />
+          )}
+          <span className="text-base font-bold text-slate-900">{etiquetaAnio(item.anio)}</span>
+        </span>
+        <span className="text-xs text-slate-500">{total} por procesar</span>
+        <span className="mt-1 flex flex-wrap items-center gap-1.5">
+          {completado && (
+            <span className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+              Completado
+            </span>
+          )}
+          {conDireccion > 0 && (
+            <span className="rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">
+              {enviadas}/{conDireccion} enviadas
+            </span>
+          )}
+          {conError > 0 && (
+            <span className="rounded-md bg-red-100 px-2 py-1 text-[10px] font-bold text-red-700">
+              {conError} con error
+            </span>
+          )}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -723,28 +860,44 @@ export default function UbicabilidadPersonas() {
                   {anioSeleccionadoApi === "" && <Check className="absolute right-3 top-3 h-4 w-4 text-runt-primary-dark" />}
                   <Layers3 className="mb-2 h-5 w-5 text-[#7C3AED]" />
                   <span className="text-sm font-bold text-slate-900">Todos</span>
-                  <span className="mt-1 text-xs text-slate-500">{aniosApi.reduce((total, item) => total + (Number(item.total) || 0), 0)} pendientes</span>
+                  <span className="mt-1 text-xs text-slate-500">{totalesConsolidados.porProcesar} por procesar</span>
+                  {totalesConsolidados.conError > 0 && (
+                    <span className="mt-1 self-start rounded-md bg-red-100 px-2 py-1 text-[10px] font-bold text-red-700">
+                      {totalesConsolidados.conError} con error
+                    </span>
+                  )}
                 </button>
-                {aniosApi.map((item) => {
-                  const seleccionado = anioSeleccionadoApi === String(item.anio);
-                  return (
-                    <button key={item.anio} type="button"
-                      onClick={() => cambiarAnioApi(String(item.anio))}
-                      disabled={cargandoPendientesApi} aria-pressed={seleccionado}
-                      className={`relative flex min-h-[108px] flex-col justify-center rounded-xl border-2 p-3.5 text-left transition-all disabled:opacity-60 ${seleccionado ? "border-[#7C3AED] bg-[#F5EEFF] ring-2 ring-[#7C3AED]/20 shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]" : "border-slate-200 bg-white hover:border-[#C4B5FD] hover:bg-[#F5EEFF]/40 hover:shadow-sm"}`}>
-                      {seleccionado && <Check className="absolute right-3 top-3 h-4 w-4 text-[#7C3AED]" />}
-                      <CalendarDays className="mb-2 h-5 w-5 text-[#7C3AED]" />
-                      <span className="text-base font-bold text-slate-900">{etiquetaAnio(item.anio)}</span>
-                      <span className="mt-1 text-xs text-slate-500">{item.total || 0} pendientes</span>
-                      {(item.conDireccion || 0) > 0 && (
-                        <span className="mt-2 self-start rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
-                          {item.enviadas || 0}/{item.conDireccion} enviadas
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                {aniosActivosApi.map((item) => tarjetaAnio(item, false))}
               </div>
+
+              {/* Años terminados: procesados y con todas las respuestas enviadas.
+                  Sigue siendo posible seleccionarlos para reenviar. */}
+              {aniosCompletadosApi.length > 0 && (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarCompletados((v) => !v)}
+                    aria-expanded={mostrarCompletados}
+                    className="flex w-full items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-left transition-colors hover:bg-emerald-50"
+                  >
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-emerald-600 transition-transform ${mostrarCompletados ? "rotate-180" : ""}`}
+                    />
+                    <span className="text-sm font-bold text-emerald-800">
+                      Completados ({aniosCompletadosApi.length})
+                    </span>
+                    <span className="ml-auto rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
+                      {aniosCompletadosApi.reduce((t, i) => t + (Number(i.enviadas) || 0), 0)}/
+                      {aniosCompletadosApi.reduce((t, i) => t + (Number(i.conDireccion) || 0), 0)} enviadas
+                    </span>
+                  </button>
+                  {mostrarCompletados && (
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                      {aniosCompletadosApi.map((item) => tarjetaAnio(item, true))}
+                    </div>
+                  )}
+                </div>
+              )}
               {aniosApi.length === 0 && (
                 <p className="mt-3 text-xs text-amber-700">No hay años registrados. Verifica que el servicio devuelve los años.</p>
               )}
@@ -794,15 +947,30 @@ export default function UbicabilidadPersonas() {
                   </div>
                   <p className="text-xs leading-relaxed text-slate-500">Envía los resultados de ubicabilidad al servicio que realizó la solicitud.</p>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <div className="rounded-xl bg-white p-3 shadow-sm">
-                    <p className="text-xl font-bold text-slate-900">{porEnviarApi}</p>
-                    <p className="mt-1 text-[11px] text-slate-500">Por enviar</p>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl bg-white p-2.5 shadow-sm">
+                    <p className="text-lg font-bold text-slate-900">{porEnviarApi}</p>
+                    <p className="mt-1 text-[10px] leading-tight text-slate-500">Por enviar</p>
                   </div>
-                  <div className="rounded-xl bg-white p-3 shadow-sm">
-                    <p className="text-xl font-bold text-emerald-600">{enviadasApi}</p>
-                    <p className="mt-1 text-[11px] text-slate-500">Enviadas</p>
+                  <div className="rounded-xl bg-white p-2.5 shadow-sm">
+                    <p className="text-lg font-bold text-emerald-600">{enviadasApi}</p>
+                    <p className="mt-1 text-[10px] leading-tight text-slate-500">Enviadas</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => abrirErroresEnvio()}
+                    disabled={cargandoPendientesApi}
+                    title="Ver el detalle de las respuestas rechazadas por Contravenciones"
+                    className="rounded-xl bg-white p-2.5 text-left shadow-sm transition-all hover:ring-2 hover:ring-red-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <p className={`text-lg font-bold ${conErrorApi > 0 ? "text-red-600" : "text-slate-400"}`}>
+                      {conErrorApi}
+                    </p>
+                    <p className="mt-1 flex items-center gap-1 text-[10px] leading-tight text-slate-500">
+                      <AlertTriangle className="h-3 w-3 shrink-0 text-red-500" />
+                      Con error
+                    </p>
+                  </button>
                 </div>
                 <button type="button"
                   disabled={!anioActivoApi || enviandoRespuestaApi || cargandoPendientesApi || porEnviarApi === 0}
@@ -815,8 +983,17 @@ export default function UbicabilidadPersonas() {
                   {enviandoRespuestaApi ? "Enviando respuestas..." : "Enviar a Contravenciones"}
                 </button>
                 <p className="mt-2 text-center text-[11px] text-slate-500">
-                  {!anioActivoApi ? "Selecciona un año para habilitar el envío." : porEnviarApi === 0 ? "No hay nuevas respuestas para enviar." : `Año ${etiquetaAnio(anioActivoApi.anio)} · ${porEnviarApi} pendientes de envío`}
+                  {!anioActivoApi
+                    ? `Totales de los ${aniosApi.length} año(s). Selecciona un año: el envío es por año.`
+                    : porEnviarApi === 0
+                      ? "No hay nuevas respuestas para enviar."
+                      : `Año ${etiquetaAnio(anioActivoApi.anio)} · ${porEnviarApi} pendientes de envío`}
                 </p>
+                {conErrorApi > 0 && (
+                  <p className="mt-1 text-center text-[11px] font-semibold text-red-600">
+                    {conErrorApi} rechazada(s) por Contravenciones · pulsa «Con error»
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1342,6 +1519,18 @@ export default function UbicabilidadPersonas() {
         confirmText="Enviar"
         onConfirm={handleConfirmEnvioAnio}
         onCancel={() => setConfirmEnvioAnioApi(null)}
+      />
+
+      <ErroresEnvioModal
+        open={erroresAbiertos}
+        titulo={`Respuestas con error · ${erroresContexto.etiqueta}`}
+        subtitulo={`Origen: ${erroresContexto.origen || "Todos los servicios"} · rechazadas por Contravenciones`}
+        errores={erroresLista}
+        cargando={erroresCargando}
+        error={erroresError}
+        etiquetaAnio={etiquetaAnio}
+        onCerrar={() => setErroresAbiertos(false)}
+        onReintentar={erroresContexto.anio !== "" ? reintentarDesdeErrores : undefined}
       />
     </div>
   );
