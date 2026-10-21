@@ -17,7 +17,8 @@ import {
 import { crearJob } from "../services/workerJobsApi";
 import {
   Upload, FileText, CheckCircle2, AlertCircle,
-  Loader2, Search, MapPin, Eye, X, Database, Download, Trash2, PlugZap, Send
+  Loader2, Search, MapPin, Eye, X, Database, Download, Trash2, PlugZap, Send,
+  CalendarDays, Layers3, LayoutGrid, RefreshCw, Info, IdCard, Check
 } from "lucide-react";
 import DocumentosSwiper from "../components/DocumentosSwiper";
 import JobProgress from "../components/JobProgress";
@@ -300,7 +301,7 @@ export default function UbicabilidadPersonas() {
 
     toast.success(
       porProcesar > POR_JOB
-        ? `${lote.length} de ${porProcesar} documento(s) cargados (lote de ${POR_JOB}). Pulsa "Crear Job": la ventana se cierra sola y vuelves a la tarjeta para el siguiente lote.`
+        ? `${lote.length} de ${porProcesar} documento(s) cargados (lote de ${POR_JOB}). Pulsa "Crear lote": la ventana se cierra sola y vuelves a la tarjeta para el siguiente lote.`
         : `${porProcesar} documento(s) cargados`
     );
   };
@@ -573,6 +574,16 @@ export default function UbicabilidadPersonas() {
     return { label: "Error", class: "bg-red-100 text-red-700" };
   };
 
+  // Estadísticas del año elegido para la devolución de resultados.
+  // El endpoint de envío actual trabaja por año, no con el filtro "Todos".
+  const anioActivoApi = aniosApi.find(
+    (item) => String(item.anio) === anioSeleccionadoApi
+  );
+  const conDireccionApi = Number(anioActivoApi?.conDireccion) || 0;
+  const enviadasApi = Number(anioActivoApi?.enviadas) || 0;
+  const porEnviarApi = Math.max(conDireccionApi - enviadasApi, 0);
+  const enviandoRespuestaApi = anioEnviandoApi !== null;
+
   return (
     <div className="space-y-5">
       <PageHeroHeader
@@ -613,7 +624,7 @@ export default function UbicabilidadPersonas() {
                 ) : (
                   <>
                     <Database size={16} />
-                    <span>Cargar desde BD</span>
+                    <span>Documentos pendientes</span>
                   </>
                 )}
               </button>
@@ -626,7 +637,7 @@ export default function UbicabilidadPersonas() {
                 style={{ backgroundColor: "#dc2626" }}
               >
                 <Trash2 size={16} />
-                <span>Limpiar</span>
+                <span>Limpiar lista</span>
               </button>
 
               <div className="hidden md:block w-px h-8 bg-slate-200" />
@@ -645,7 +656,7 @@ export default function UbicabilidadPersonas() {
                 ) : (
                   <>
                     <PlugZap size={16} />
-                    <span>Cargar solicitudes API</span>
+                    <span>Solicitudes recibidas</span>
                   </>
                 )}
               </button>
@@ -654,238 +665,229 @@ export default function UbicabilidadPersonas() {
         </div>
       )}
 
-      {/* ── Panel de solicitudes API pendientes ── */}
+      {/* ── Panel de solicitudes API pendientes — diseño AutoCore ── */}
       {mostrarPendientesApi && (
-        <div className="rounded-2xl border-2 border-violet-300 shadow-md bg-gradient-to-br from-violet-50 via-white to-white p-5 md:p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="flex items-center gap-2 text-base font-bold text-[#4c1d95]">
-                Solicitudes API pendientes
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#7c3aed] text-white">
-                  {totalApi}
-                </span>
-              </h3>
-              <p className="text-xs text-[#64748b] mt-1">
-                {totalEnColaApi} en cola · {Math.max(totalApi - totalEnColaApi, 0)} por procesar · lotes de {POR_JOB}
-              </p>
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card animate-fade-in">
+          {/* Cabecera */}
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-runt-light">
+                <Database className="h-6 w-6 text-runt-primary" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-bold text-slate-900">Solicitudes API pendientes</h2>
+                  <span className="rounded-full bg-[#7C3AED] px-3 py-0.5 text-xs font-bold text-white shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]">{totalApi}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                  <span><strong className="text-slate-700">{totalEnColaApi}</strong> en cola</span>
+                  <span><strong className="text-slate-700">{Math.max(totalApi - totalEnColaApi, 0)}</strong> por procesar</span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1">Lotes de {POR_JOB}</span>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => {
+            <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+              <button type="button"
+                onClick={() => cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi)}
+                disabled={cargandoPendientesApi}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50">
+                <RefreshCw className={`h-4 w-4 ${cargandoPendientesApi ? "animate-spin" : ""}`} /> Actualizar
+              </button>
+              <button type="button" onClick={() => {
                 setMostrarPendientesApi(false);
                 setDocumentosApi("");
                 setTipoDocumentoApi("");
                 setOrigenCargadoApi("");
                 setAnioCargadoApi(null);
                 setGrupoCargadoApi(null);
-              }}
-              className="text-xs font-semibold text-[#64748b] hover:text-[#7c3aed] transition-colors"
-            >
-              Cerrar
-            </button>
-          </div>
-
-          {/* 1) Año de los comparendos */}
-          <p className="text-xs font-semibold text-[#1e293b] mb-0.5">
-            1. Selecciona el año a consultar
-          </p>
-          <p className="text-[11px] text-[#64748b] mb-2">
-            Año de los comparendos que motivan la solicitud
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
-            <button
-              onClick={() => cambiarAnioApi("")}
-              className={`p-4 rounded-xl border-2 transition-all text-left ${
-                anioSeleccionadoApi === ""
-                  ? "border-[#7c3aed] bg-violet-100 ring-2 ring-[#7c3aed]/30"
-                  : "border-slate-200 bg-white hover:border-[#7c3aed] hover:bg-violet-50/60"
-              }`}
-            >
-              <p className="text-lg font-bold text-[#1e293b]">Todos</p>
-              <p className="text-xs text-[#64748b] mt-0.5">
-                {totalApi.toLocaleString("es-CO")} pendiente(s)
-              </p>
-            </button>
-
-            {aniosApi.map((a) => {
-              const activo = anioSeleccionadoApi === String(a.anio);
-              const enviando = anioEnviandoApi === a.anio;
-              const conDireccion = a.conDireccion || 0;
-              const enviadas = a.enviadas || 0;
-              const porEnviar = Math.max(conDireccion - enviadas, 0);
-              return (
-                <div key={a.anio} className="flex flex-col gap-1.5">
-                  <button
-                    onClick={() => cambiarAnioApi(String(a.anio))}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      activo
-                        ? "border-[#7c3aed] bg-violet-100 ring-2 ring-[#7c3aed]/30"
-                        : "border-slate-200 bg-white hover:border-[#7c3aed] hover:bg-violet-50/60"
-                    }`}
-                  >
-                    <p className="text-lg font-bold text-[#7c3aed]">{etiquetaAnio(a.anio)}</p>
-                    <p className="text-xs text-[#64748b] mt-0.5">
-                      {a.total.toLocaleString("es-CO")} pendiente(s)
-                    </p>
-                    {conDireccion > 0 && (
-                      <span
-                        className={`mt-1.5 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-bold ${
-                          porEnviar > 0
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-emerald-100 text-emerald-700"
-                        }`}
-                      >
-                        {enviadas}/{conDireccion} enviada(s)
-                      </span>
-                    )}
-                  </button>
-
-                  {conDireccion > 0 && (
-                    <button
-                      type="button"
-                      disabled={enviando}
-                      onClick={() =>
-                        setConfirmEnvioAnioApi({ anio: a.anio, conDireccion, enviadas, porEnviar })
-                      }
-                      className="flex items-center justify-center gap-1.5 rounded-lg border border-[#7c3aed] bg-white px-2 py-1.5 text-[11px] font-bold text-[#7c3aed] transition-colors hover:bg-[#7c3aed] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {enviando ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Send className="h-3.5 w-3.5" />
-                      )}
-                      {enviando ? "Enviando…" : "Enviar a contravenciones"}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {aniosApi.length === 0 && (
-            <p className="text-xs text-amber-600 -mt-2 mb-5">
-              No hay años registrados. O las solicitudes llegaron sin <code>anio</code>, o
-              el servidor aún corre el código viejo.
-            </p>
-          )}
-          {aniosApi.some((a) => a.anio === 0) && aniosApi.length > 1 && (
-            <p className="text-[11px] text-[#64748b] -mt-4 mb-5">
-              <strong>«Sin año»</strong> son solicitudes que llegaron antes de que el
-              servicio enviara el año. Si vuelves a enviar esas personas desde
-              contravenciones con su <code>anio</code>, se actualizan solas y dejan de
-              aparecer aquí.
-            </p>
-          )}
-
-          {/* 2) Origen */}
-          <p className="text-xs font-semibold text-[#1e293b] mb-2">2. Servicio que envió la solicitud</p>
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              onClick={() => cambiarOrigenApi("")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                origenSeleccionadoApi === ""
-                  ? "bg-[#7c3aed] text-white border-[#7c3aed]"
-                  : "bg-white text-[#64748b] border-slate-200 hover:border-[#7c3aed]"
-              }`}
-            >
-              Todos
-            </button>
-            {origenesApi.map((o) => (
-              <button
-                key={o.origen}
-                onClick={() => cambiarOrigenApi(o.origen)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                  origenSeleccionadoApi === o.origen
-                    ? "bg-[#7c3aed] text-white border-[#7c3aed]"
-                    : "bg-white text-[#64748b] border-slate-200 hover:border-[#7c3aed]"
-                }`}
-              >
-                {o.origen} ({o.total})
+              }} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                <X className="h-4 w-4" /> Cerrar
               </button>
-            ))}
-          </div>
-
-          {/* 3) Tipo de documento */}
-          <p className="text-xs font-semibold text-[#1e293b] mb-2">3. Tipo de documento</p>
-          {gruposApi.length === 0 ? (
-            <p className="text-sm text-[#94a3b8] text-center py-4">
-              No hay grupos para mostrar con los filtros actuales.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {gruposApi.map((grupo) => {
-                const seleccionado =
-                  grupoCargadoApi &&
-                  grupoCargadoApi.origen === grupo.origen &&
-                  grupoCargadoApi.anio === grupo.anio &&
-                  grupoCargadoApi.tipoDocumento === grupo.tipoDocumento;
-
-                const sinTrabajo = grupo.porProcesar === 0;
-
-                return (
-                  <button
-                    key={`${grupo.origen}-${grupo.anio}-${grupo.tipoDocumento}`}
-                    onClick={() => seleccionarGrupoApi(grupo)}
-                    disabled={sinTrabajo}
-                    className={`group flex items-center justify-between gap-3 p-4 rounded-xl border-2 transition-all text-left disabled:cursor-not-allowed disabled:opacity-50 ${
-                      seleccionado
-                        ? "border-[#7c3aed] bg-violet-100 ring-2 ring-[#7c3aed]/30"
-                        : "border-slate-200 bg-white hover:border-[#7c3aed] hover:bg-violet-50/60 hover:shadow-sm"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-[#7c3aed]">
-                        {grupo.origen}
-                        {grupo.anio != null ? ` · ${etiquetaAnio(grupo.anio)}` : ""}
-                      </p>
-                      <p className="text-sm font-bold text-[#1e293b] mt-0.5">
-                        {grupo.tipoDocumento}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                        {sinTrabajo ? (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-600">
-                            Todo en cola
-                          </span>
-                        ) : (
-                          <>
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700">
-                              {grupo.porProcesar} por procesar
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500">
-                              {grupo.enCola} en cola
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <span
-                      className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
-                        sinTrabajo
-                          ? "bg-slate-100 text-slate-400"
-                          : "bg-[#7c3aed] text-white group-hover:bg-[#6d28d9]"
-                      }`}
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      Cargar
-                    </span>
-                  </button>
-                );
-              })}
             </div>
-          )}
-
-          <div className="flex items-center gap-3 mt-4">
-            <button
-              onClick={() => setConfirmLimpiarApiOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white transition-all hover:shadow-lg"
-              style={{ backgroundColor: "#dc2626" }}
-            >
-              <Trash2 size={14} />
-              Limpiar solicitudes API
-            </button>
-            <span className="text-xs text-[#94a3b8]">
-              Solo se envían {POR_JOB} documentos por trabajo. Al crearlo, los contadores se actualizan solos.
-            </span>
           </div>
-        </div>
+
+          <div className="space-y-4 p-4 md:p-6">
+            {/* Paso 1: Año de los comparendos */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="mb-4 flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-runt-light text-sm font-bold text-runt-primary-dark">1</span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Selecciona el año a consultar</h3>
+                  <p className="mt-1 text-xs text-slate-500">Año de los comparendos que motivan la solicitud.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                <button type="button" onClick={() => cambiarAnioApi("")}
+                  disabled={cargandoPendientesApi} aria-pressed={anioSeleccionadoApi === ""}
+                  className={`relative flex min-h-[108px] flex-col justify-center rounded-xl border-2 p-3.5 text-left transition-all disabled:opacity-60 ${anioSeleccionadoApi === "" ? "border-[#7C3AED] bg-[#F5EEFF] ring-2 ring-[#7C3AED]/20 shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]" : "border-slate-200 bg-white hover:border-[#C4B5FD] hover:bg-[#F5EEFF]/40 hover:shadow-sm"}`}>
+                  {anioSeleccionadoApi === "" && <Check className="absolute right-3 top-3 h-4 w-4 text-runt-primary-dark" />}
+                  <Layers3 className="mb-2 h-5 w-5 text-[#7C3AED]" />
+                  <span className="text-sm font-bold text-slate-900">Todos</span>
+                  <span className="mt-1 text-xs text-slate-500">{aniosApi.reduce((total, item) => total + (Number(item.total) || 0), 0)} pendientes</span>
+                </button>
+                {aniosApi.map((item) => {
+                  const seleccionado = anioSeleccionadoApi === String(item.anio);
+                  return (
+                    <button key={item.anio} type="button"
+                      onClick={() => cambiarAnioApi(String(item.anio))}
+                      disabled={cargandoPendientesApi} aria-pressed={seleccionado}
+                      className={`relative flex min-h-[108px] flex-col justify-center rounded-xl border-2 p-3.5 text-left transition-all disabled:opacity-60 ${seleccionado ? "border-[#7C3AED] bg-[#F5EEFF] ring-2 ring-[#7C3AED]/20 shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]" : "border-slate-200 bg-white hover:border-[#C4B5FD] hover:bg-[#F5EEFF]/40 hover:shadow-sm"}`}>
+                      {seleccionado && <Check className="absolute right-3 top-3 h-4 w-4 text-[#7C3AED]" />}
+                      <CalendarDays className="mb-2 h-5 w-5 text-[#7C3AED]" />
+                      <span className="text-base font-bold text-slate-900">{etiquetaAnio(item.anio)}</span>
+                      <span className="mt-1 text-xs text-slate-500">{item.total || 0} pendientes</span>
+                      {(item.conDireccion || 0) > 0 && (
+                        <span className="mt-2 self-start rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
+                          {item.enviadas || 0}/{item.conDireccion} enviadas
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {aniosApi.length === 0 && (
+                <p className="mt-3 text-xs text-amber-700">No hay años registrados. Verifica que el servicio devuelve los años.</p>
+              )}
+              {aniosApi.some((item) => item.anio === 0) && (
+                <p className="mt-3 text-xs text-slate-500">«Sin año» representa solicitudes sin año de comparendo identificado.</p>
+              )}
+            </div>
+
+            {/* Paso 2: Origen y envío, claramente separados */}
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 xl:col-span-3">
+                <div className="mb-4 flex items-start gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-runt-light text-sm font-bold text-runt-primary-dark">2</span>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Servicio que envió la solicitud</h3>
+                    <p className="mt-1 text-xs text-slate-500">Filtra las solicitudes por el servicio de origen.</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => cambiarOrigenApi("")}
+                    disabled={cargandoPendientesApi}
+                    className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold disabled:opacity-60 ${origenSeleccionadoApi === "" ? "border-[#7C3AED] bg-[#F5EEFF] text-[#6D28D9]" : "border-slate-200 bg-white text-slate-600 hover:border-[#7C3AED]"}`}>
+                    <LayoutGrid className="h-4 w-4" /> Todos
+                    {origenSeleccionadoApi === "" && <Check className="h-4 w-4" />}
+                  </button>
+                  {origenesApi.map((origen) => (
+                    <button key={origen.origen} type="button"
+                      onClick={() => cambiarOrigenApi(origen.origen)}
+                      disabled={cargandoPendientesApi}
+                      className={`flex max-w-full items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold disabled:opacity-60 ${origenSeleccionadoApi === origen.origen ? "border-[#7C3AED] bg-[#F5EEFF] text-[#6D28D9]" : "border-slate-200 bg-white text-slate-600 hover:border-[#7C3AED]"}`}>
+                      <PlugZap className="h-4 w-4 shrink-0" />
+                      <span className="break-all">{origen.origen}</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-600">{origen.total}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Panel de respuestas, NO está dentro de las tarjetas de año */}
+              <div className="flex flex-col justify-between rounded-2xl border border-[#C4B5FD] bg-gradient-to-br from-[#F5EEFF] via-white to-runt-light p-4 shadow-sm xl:col-span-2">
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm">
+                      <Send className="h-4 w-4 text-[#7C3AED]" />
+                    </span>
+                    <h3 className="text-sm font-bold text-slate-900">Respuestas a Contravenciones</h3>
+                  </div>
+                  <p className="text-xs leading-relaxed text-slate-500">Envía los resultados de ubicabilidad al servicio que realizó la solicitud.</p>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-white p-3 shadow-sm">
+                    <p className="text-xl font-bold text-slate-900">{porEnviarApi}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">Por enviar</p>
+                  </div>
+                  <div className="rounded-xl bg-white p-3 shadow-sm">
+                    <p className="text-xl font-bold text-emerald-600">{enviadasApi}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">Enviadas</p>
+                  </div>
+                </div>
+                <button type="button"
+                  disabled={!anioActivoApi || enviandoRespuestaApi || cargandoPendientesApi || porEnviarApi === 0}
+                  onClick={() => {
+                    if (!anioActivoApi) return;
+                    setConfirmEnvioAnioApi({ anio: anioActivoApi.anio, conDireccion: conDireccionApi, enviadas: enviadasApi, porEnviar: porEnviarApi });
+                  }}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-4 py-3 text-sm font-bold text-white shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)] transition-colors hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">
+                  {enviandoRespuestaApi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {enviandoRespuestaApi ? "Enviando respuestas..." : "Enviar a Contravenciones"}
+                </button>
+                <p className="mt-2 text-center text-[11px] text-slate-500">
+                  {!anioActivoApi ? "Selecciona un año para habilitar el envío." : porEnviarApi === 0 ? "No hay nuevas respuestas para enviar." : `Año ${etiquetaAnio(anioActivoApi.anio)} · ${porEnviarApi} pendientes de envío`}
+                </p>
+              </div>
+            </div>
+
+            {/* Paso 3: Tipos de documento */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="mb-4 flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-runt-light text-sm font-bold text-runt-primary-dark">3</span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Tipo de documento</h3>
+                  <p className="mt-1 text-xs text-slate-500">Selecciona el grupo de documentos que deseas procesar.</p>
+                </div>
+              </div>
+              {gruposApi.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
+                  <FileText className="mx-auto mb-2 h-7 w-7 text-slate-300" />
+                  <p className="text-sm text-slate-500">No hay grupos con los filtros actuales.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {gruposApi.map((grupo) => {
+                    const seleccionado = grupoCargadoApi &&
+                      grupoCargadoApi.origen === grupo.origen &&
+                      grupoCargadoApi.anio === grupo.anio &&
+                      grupoCargadoApi.tipoDocumento === grupo.tipoDocumento;
+                    const sinTrabajo = grupo.porProcesar === 0;
+                    return (
+                      <button key={`${grupo.origen}-${grupo.anio}-${grupo.tipoDocumento}`}
+                        type="button" onClick={() => seleccionarGrupoApi(grupo)} disabled={sinTrabajo}
+                        className={`group flex min-w-0 items-center justify-between gap-3 rounded-xl border-2 p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${seleccionado ? "border-[#7C3AED] bg-[#F5EEFF] ring-2 ring-[#7C3AED]/20 shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]" : "border-slate-200 bg-white hover:border-[#C4B5FD] hover:bg-[#F5EEFF]/40 hover:shadow-sm"}`}>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-runt-light">
+                            <IdCard className="h-6 w-6 text-runt-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="break-all text-[10px] font-bold uppercase tracking-wide text-runt-primary-dark">
+                              {grupo.origen}{grupo.anio != null ? ` · ${etiquetaAnio(grupo.anio)}` : ""}
+                            </p>
+                            <h4 className="mt-1 text-sm font-bold text-slate-900">{grupo.tipoDocumento}</h4>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {sinTrabajo ? (
+                                <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">Todo en cola</span>
+                              ) : (
+                                <>
+                                  <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">{grupo.porProcesar} por procesar</span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">{grupo.enCola} en cola</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <span className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold ${sinTrabajo ? "bg-slate-100 text-slate-400" : "bg-[#F5EEFF] text-[#6D28D9] group-hover:bg-[#7C3AED] group-hover:text-white"}`}>
+                          <Upload className="h-4 w-4" /> Cargar
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <button type="button" onClick={() => setConfirmLimpiarApiOpen(true)}
+                  className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100">
+                  <Trash2 className="h-4 w-4" /> Limpiar solicitudes API
+                </button>
+                <div className="flex items-start gap-2 text-xs leading-relaxed text-slate-500">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-runt-primary" />
+                  <span>Solo se procesan {POR_JOB} documentos por trabajo. Al crear el lote, los contadores se actualizan automáticamente.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       )}
 
       {/* ── Panel de personas pendientes ── */}
@@ -959,7 +961,7 @@ export default function UbicabilidadPersonas() {
             className="flex items-center gap-2 px-5 py-3 bg-[#00ABE4] hover:bg-[#0095C5] text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
           >
             {validando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            {validando ? "Validando..." : "Validar archivo"}
+            {validando ? "Validando..." : "Validar documentos"}
           </button>
 
           <button
@@ -1009,7 +1011,7 @@ export default function UbicabilidadPersonas() {
               className="flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
             >
               {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              {procesando ? "Creando trabajo..." : "Crear Job"}
+              {procesando ? "Creando trabajo..." : "Crear lote"}
             </button>
             <button
               onClick={() => { setDocumentosCargados(""); setMostrarPendientes(false); }}
@@ -1057,7 +1059,7 @@ export default function UbicabilidadPersonas() {
               className="flex items-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-base font-bold shadow-md transition-colors disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed"
             >
               {procesando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-              {procesando ? "Creando trabajo..." : "Crear Job"}
+              {procesando ? "Creando trabajo..." : "Crear lote"}
             </button>
             <button
               onClick={() => {

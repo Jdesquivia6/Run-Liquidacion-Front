@@ -12,6 +12,10 @@ export default {
         'runt-primary': '#00ABE4',
         'runt-primary-dark': '#0095C5',
         'runt-primary-light': '#33BDEE',
+        'accent-violet': '#7C3AED',
+        'accent-violet-dark': '#6D28D9',
+        'accent-violet-soft': '#F5EEFF',
+        'accent-violet-border': '#C4B5FD',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
