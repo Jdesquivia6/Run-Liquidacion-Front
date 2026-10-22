@@ -29,6 +29,10 @@ import ErroresEnvioModal from "../components/ErroresEnvioModal";
 
 const POR_JOB = 90;
 
+// Orígenes que crea este módulo. Debe mantenerse en sincronía con
+// ORIGENES_MODULO de ScrapingRC/controllers/ubicabilidadPersonas.controller.js
+const ORIGENES_MODULO = ["CARGADO_POR_EXCEL", "API_CONTRAVENCIONES", "API_TEST"];
+
 export default function UbicabilidadPersonas() {
   const fileInputRef = useRef(null);
 
@@ -88,6 +92,10 @@ export default function UbicabilidadPersonas() {
   // Historial de consultados
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  // "" = los orígenes que crea este módulo (Excel + API). Un valor concreto
+  // restringe a ese origen. SCRAPING queda fuera: no pertenece a este módulo.
+  const [origenHistorial, setOrigenHistorial] = useState("");
+  const [origenResultados, setOrigenResultados] = useState("");
 
   useEffect(() => {
     cargarHistorial();
@@ -502,14 +510,18 @@ export default function UbicabilidadPersonas() {
     }
   };
 
-  const cargarResultados = async (page = 1) => {
+  const cargarResultados = async (page = 1, origenOverride) => {
     try {
       setCargandoResultados(true);
+      // origenOverride: el cambio de origen recarga de una vez, sin esperar a
+      // que el estado de React se asiente.
+      const origen = origenOverride !== undefined ? origenOverride : origenResultados;
       const resp = await listarResultados({
         page,
         limit: pagination.limit,
         documento: filtros.documento || undefined,
-        estado: filtros.estado || undefined
+        estado: filtros.estado || undefined,
+        origen: origen || undefined
       });
       if (resp.ok) {
         setResultados(resp.data.results);
@@ -530,10 +542,11 @@ export default function UbicabilidadPersonas() {
     cargarResultados(1);
   };
 
-  const cargarHistorial = async () => {
+  const cargarHistorial = async (origenOverride) => {
     try {
       setCargandoHistorial(true);
-      const resp = await listarHistorial();
+      const origen = origenOverride !== undefined ? origenOverride : origenHistorial;
+      const resp = await listarHistorial(origen);
       if (resp.ok) {
         setHistorial(resp.results || []);
       } else {
@@ -582,7 +595,10 @@ export default function UbicabilidadPersonas() {
   const estadoLabel = (row) => {
     if (!row.direccion_consultada) return { label: "Pendiente", class: "bg-amber-100 text-amber-700" };
     if (row.direccion_encontrada) return { label: "Encontrada", class: "bg-emerald-100 text-emerald-700" };
-    return { label: "Error", class: "bg-red-100 text-red-700" };
+    // Consultada sin dirección: si hay error de consulta es un Error propiamente
+    // dicho; si no, RUNT devolvió la persona pero sin dirección registrada.
+    if (row.error_consulta_direccion) return { label: "Error", class: "bg-red-100 text-red-700" };
+    return { label: "Sin dirección", class: "bg-slate-200 text-slate-700" };
   };
 
   // Estadísticas del año elegido para la devolución de resultados.
@@ -1309,7 +1325,13 @@ export default function UbicabilidadPersonas() {
                 cargarResultados(1);
               }}
               onComplete={() => {
+                // El worker terminó: refresca TODO lo que depende del job.
+                // Resultados, el historial de abajo y los contadores del año
+                // (que alimentan "Por enviar / Enviadas / Con error").
                 cargarResultados(1);
+                cargarHistorial();
+                cargarSolicitudesApi();
+                refrescarContadoresApi();
               }}
             />
           ))}
@@ -1342,6 +1364,20 @@ export default function UbicabilidadPersonas() {
             className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-[#00ABE4]"
           />
           <select
+            value={origenResultados}
+            onChange={(e) => {
+              setOrigenResultados(e.target.value);
+              cargarResultados(1, e.target.value);
+            }}
+            title="Origen de los documentos"
+            className="px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-[#00ABE4]"
+          >
+            <option value="">Este módulo</option>
+            {ORIGENES_MODULO.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          <select
             name="estado"
             value={filtros.estado}
             onChange={handleFiltroChange}
@@ -1349,6 +1385,7 @@ export default function UbicabilidadPersonas() {
           >
             <option value="">Todos los estados</option>
             <option value="CONSULTADA">Encontrada</option>
+            <option value="SIN_DIRECCION">Sin dirección</option>
             <option value="PENDIENTE">Pendiente</option>
             <option value="ERROR">Error</option>
           </select>
@@ -1392,12 +1429,14 @@ export default function UbicabilidadPersonas() {
                         <td className="py-2.5 px-3 text-[#1e293b]">
                           {[row.nombres, row.apellidos].filter(Boolean).join(" ") || "—"}
                         </td>
-                        <td className="py-2.5 px-3 text-[#64748b] max-w-[200px] truncate">
+                        <td className="py-2.5 px-3 text-[#64748b] max-w-[200px] truncate" title={row.direccion || undefined}>
                           {row.error_consulta_direccion ? (
                             <span className="text-red-500">{row.error_consulta_direccion}</span>
                           ) : row.direccion_encontrada ? (
-                            row.fk_direcciones || "—"
-                          ) : "—"}
+                            row.direccion || "—"
+                          ) : (
+                            <span className="text-slate-400">Sin dirección</span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3">
                           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${est.class}`}>
@@ -1456,8 +1495,22 @@ export default function UbicabilidadPersonas() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <select
+              value={origenHistorial}
+              onChange={(e) => {
+                setOrigenHistorial(e.target.value);
+                cargarHistorial(e.target.value);
+              }}
+              title="Origen de los documentos"
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs text-[#64748b] focus:outline-none focus:border-[#00ABE4]"
+            >
+              <option value="">Este módulo</option>
+              {ORIGENES_MODULO.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
             <button
-              onClick={cargarHistorial}
+              onClick={() => cargarHistorial()}
               disabled={cargandoHistorial}
               className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-xs text-[#64748b] hover:bg-slate-50 disabled:opacity-60"
             >

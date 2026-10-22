@@ -13,10 +13,11 @@ export async function obtenerDocumentosParaProcesar(documentos) {
   return response.data;
 }
 
-export async function listarResultados({ page = 1, limit = 20, documento, estado, fecha_inicio, fecha_fin } = {}) {
+export async function listarResultados({ page = 1, limit = 20, documento, estado, origen, fecha_inicio, fecha_fin } = {}) {
   const params = new URLSearchParams({ page, limit });
   if (documento) params.append('documento', documento);
   if (estado) params.append('estado', estado);
+  if (origen) params.append('origen', origen);
   if (fecha_inicio) params.append('fecha_inicio', fecha_inicio);
   if (fecha_fin) params.append('fecha_fin', fecha_fin);
   const response = await axios.get(`${API}/resultados?${params.toString()}`);
@@ -28,8 +29,9 @@ export async function listarPendientes(limit = 90) {
   return response.data;
 }
 
-export async function listarHistorial() {
-  const response = await axios.get(`${API}/historial`);
+export async function listarHistorial(origen = "") {
+  const qs = origen ? `?origen=${encodeURIComponent(origen)}` : "";
+  const response = await axios.get(`${API}/historial${qs}`);
   return response.data;
 }
 

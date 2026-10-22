@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { obtenerProgresoJob, obtenerDetalleJob, cancelarJob, reintentarFallidos, exportarJobExcel } from "../services/workerJobsApi";
 import toast from "react-hot-toast";
-import { 
-  Play, Pause, RotateCcw, CheckCircle, XCircle, 
-  Clock, AlertTriangle, Loader2, RefreshCw, Trash2, Download 
+import {
+  Play, Pause, RotateCcw, CheckCircle, XCircle,
+  Clock, AlertTriangle, Loader2, RefreshCw, Trash2, Download, X
 } from "lucide-react";
 
 const ESTADO_COLORS = {
@@ -71,9 +71,15 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
     if (!autoRefresh) return;
     
     // Solo llamar onComplete una vez cuando el job termina
-    if (job && (job.estado === "finalizado" || job.estado === "fallido") && onComplete && !onCompleteCalled) {
+    if (job && (job.estado === "finalizado" || job.estado === "fallido") && !onCompleteCalled) {
       setOnCompleteCalled(true);
-      onComplete(job, items);
+      const total = job.total || items.length || 0;
+      toast.success(
+        `Trabajo finalizado — ${job.exitosas || 0} exitosas, ` +
+        `${job.fallidas || 0} fallidas de ${total}`,
+        { id: `job-done-${jobId}` }
+      );
+      if (onComplete) onComplete(job, items);
       return;
     }
 
@@ -159,9 +165,9 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
           </p>
         </div>
 
-        {/* Botones de acción */}
-        {job?.estado !== "finalizado" && job?.estado !== "cancelado" && (
-          <div className="flex gap-2">
+        {/* Acciones + cerrar */}
+        <div className="flex flex-wrap items-center gap-2">
+          {job?.estado !== "finalizado" && job?.estado !== "cancelado" && (
             <button
               onClick={handleCancelar}
               disabled={cargandoAccion}
@@ -170,33 +176,46 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
               <Pause className="w-4 h-4" />
               Cancelar
             </button>
-          </div>
-        )}
+          )}
 
-        {job?.estado === "finalizado" && (
-          <div className="flex flex-wrap gap-2">
-            {counters.fallidas > 0 && (
-              <button
-                onClick={handleReintentar}
-                disabled={cargandoAccion}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-xl hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Reintentar fallidos
-              </button>
-            )}
-            {["personas-direcciones", "ubicabilidad-personas"].includes(job?.modulo) && (
-              <button
-                onClick={handleDescargarExcel}
-                disabled={cargandoAccion}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl hover:bg-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                Descargar Excel
-              </button>
-            )}
-          </div>
-        )}
+          {job?.estado === "finalizado" && (
+            <>
+              {counters.fallidas > 0 && (
+                <button
+                  onClick={handleReintentar}
+                  disabled={cargandoAccion}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-xl hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Reintentar fallidos
+                </button>
+              )}
+              {["personas-direcciones", "ubicabilidad-personas"].includes(job?.modulo) && (
+                <button
+                  onClick={handleDescargarExcel}
+                  disabled={cargandoAccion}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl hover:bg-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  Descargar Excel
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Cerrar: el panel es solo monitoreo. Cerrarlo no cancela nada,
+              el worker sigue corriendo en segundo plano. */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              title="Cerrar panel"
+              aria-label="Cerrar panel de progreso"
+              className="p-2 rounded-xl text-[#64748b] hover:bg-slate-100 hover:text-[#1e293b] transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Barra de progreso */}
