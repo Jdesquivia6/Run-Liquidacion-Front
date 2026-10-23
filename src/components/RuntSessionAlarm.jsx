@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 import { Volume2, VolumeX, AlertTriangle, ExternalLink, CircleDot } from "lucide-react";
 import sonidoLiquidacion from "../assets/sonidoLiquidacion.mp3";
-import { obtenerEstadoSesionRunt } from "../services/sessionRunt";
+import { getLocalSession, saveLocalSession, obtenerEstadoSesionRunt } from "../services/sessionRunt";
 
 const LOCAL_API_BASE = "http://localhost:3000";
 const UMBRAL_ALARMA_MINUTOS = 5;
@@ -30,6 +30,25 @@ export default function RuntSessionAlarm() {
     }
   }, []);
 
+  // Recalcula el restante localmente: si el backend no responde, setSession no se
+  // ejecuta y la alarma quedaria congelada en un valor viejo (nunca se dispararia
+  // aunque la sesión ya haya vencido).
+  const recalcularLocal = useCallback(() => {
+    const local = getLocalSession();
+    setSession(prev => {
+      if (local) return { ...(prev || {}), ...local };
+      if (!prev) return prev;
+      return {
+        ...prev,
+        activa: false,
+        puedeConsultar: false,
+        minutosRestantes: 0,
+        capacidadSegura: 0,
+        mensaje: "La sesión RUNT ya venció"
+      };
+    });
+  }, []);
+
   useEffect(() => {
     actualizarEstado();
     const interval = setInterval(actualizarEstado, POLLING_MS);
@@ -37,10 +56,19 @@ export default function RuntSessionAlarm() {
   }, [actualizarEstado]);
 
   useEffect(() => {
+    const tick = setInterval(recalcularLocal, 15000);
+    return () => clearInterval(tick);
+  }, [recalcularLocal]);
+
+  useEffect(() => {
     const handler = (event) => {
       if (event.origin !== LOCAL_API_BASE) return;
       if (event.data?.type === "runt-session-iniciada" && event.data?.payload?.session) {
-        setSession(event.data.payload.session);
+        // Sincronizar localStorage: el tick local recalculará a partir de aqui,
+        // y si solo se setea el estado en memoria el contador volvería a un valor
+        // viejo en el proximo refresco.
+        saveLocalSession(event.data.payload.session);
+        setSession(getLocalSession() || event.data.payload.session);
         setAlarmaActiva(false);
         alarmTriggeredRef.current = false;
         if (audioRef.current) {

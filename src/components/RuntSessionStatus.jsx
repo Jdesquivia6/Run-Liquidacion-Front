@@ -24,6 +24,25 @@ export default function RuntSessionStatus({ compact = false, iconOnly = false })
     }
   }, []);
 
+  // El restante se recalcula desde localStorage. Si solo se confia en el fetch,
+  // cuando el backend no responde setSession no se ejecuta nunca y el contador
+  // queda congelado en el ultimo valor recibido (p. ej. 60 recien registrado).
+  const recalcularLocal = useCallback(() => {
+    const local = getLocalSession();
+    setSession(prev => {
+      if (local) return { ...(prev || {}), ...local };
+      if (!prev) return prev;
+      return {
+        ...prev,
+        activa: false,
+        puedeConsultar: false,
+        minutosRestantes: 0,
+        capacidadSegura: 0,
+        mensaje: "La sesión RUNT ya venció"
+      };
+    });
+  }, []);
+
   const registrarSesion = () => {
     const ventana = window.open(
       `${LOCAL_API_BASE}/api/runt-session/iniciar`,
@@ -56,6 +75,11 @@ export default function RuntSessionStatus({ compact = false, iconOnly = false })
     const interval = setInterval(actualizarEstado, 15000);
     return () => clearInterval(interval);
   }, [actualizarEstado]);
+
+  useEffect(() => {
+    const tick = setInterval(recalcularLocal, 30000);
+    return () => clearInterval(tick);
+  }, [recalcularLocal]);
 
   const activa = session?.activa;
   const minutos = session?.minutosRestantes || 0;
