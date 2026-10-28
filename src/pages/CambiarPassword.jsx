@@ -1,78 +1,235 @@
-import { useState } from "react";
+
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  CarFront, ShieldCheck, Lock, Eye, EyeOff,
+  CheckCircle2, AlertCircle, Loader2, ArrowRight,
+  LogOut, KeyRound, Fingerprint, CircleCheck,
+  Shield, Check, X
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { cambiarMiPasswordRequest } from "../services/authApi";
 import { useAuth } from "../auth/AuthContext";
 
+const INPUT = "h-[52px] w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 text-[16px] text-slate-800 outline-none placeholder:text-slate-400 disabled:bg-slate-50";
+const CRITERIOS = [
+  { label: "Mínimo 6 caracteres", test: v => v.length >= 6 },
+  { label: "Una letra mayúscula", test: v => /[A-Z]/.test(v) },
+  { label: "Un número", test: v => /[0-9]/.test(v) },
+  { label: "Un carácter especial", test: v => /[^A-Za-z0-9]/.test(v) }
+];
+
+function BrandPanel({ obligatorio }) {
+  const reduce = useReducedMotion();
+
+  return (
+    <aside className="relative hidden h-full min-h-0 flex-col overflow-y-auto bg-[#081F3A] px-8 py-5 text-white lg:flex xl:px-12 xl:py-7">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -right-32 -top-32 h-[480px] w-[480px] rounded-full border border-cyan-400/10" />
+        <div className="absolute -right-16 -top-16 h-[350px] w-[350px] rounded-full border border-cyan-400/10" />
+        <div className="absolute -bottom-40 -left-32 h-[440px] w-[440px] rounded-full bg-[#00ABE4]/10 blur-[90px]" />
+        <div className="absolute inset-0 opacity-[0.045]" style={{
+          backgroundImage: "linear-gradient(white 1px,transparent 1px),linear-gradient(90deg,white 1px,transparent 1px)",
+          backgroundSize: "45px 45px"
+        }} />
+      </div>
+
+      <Link to="/" className="relative z-10 flex w-fit shrink-0 items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#00ABE4] to-[#0095C5] shadow-lg shadow-cyan-500/20">
+          <CarFront size={23} />
+        </span>
+        <span>
+          <span className="block text-[22px] font-extrabold tracking-tight">
+            Auto<span className="text-[#43C9F0]">Core</span>
+          </span>
+          <span className="block text-[9px] font-semibold tracking-[0.17em] text-slate-400">
+            CENTRO DE OPERACIONES
+          </span>
+        </span>
+      </Link>
+
+      <div className="relative z-10 my-auto w-full max-w-[510px] py-6">
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5">
+            <ShieldCheck size={13} className="text-cyan-300" />
+            <span className="text-[10px] font-bold tracking-wide text-cyan-200">
+              SEGURIDAD DE TU CUENTA
+            </span>
+          </div>
+
+          <h1 className="mt-5 text-[clamp(30px,3vw,47px)] font-extrabold leading-[1.12] tracking-tight">
+            Protege tu acceso,
+            <span className="mt-1 block text-[#43C9F0]">
+              mantén el control.
+            </span>
+          </h1>
+
+          <p className="mt-4 max-w-[430px] text-[13px] leading-6 text-slate-300 xl:text-sm">
+            Actualiza tus credenciales y continúa gestionando
+            tus operaciones en AutoCore.
+          </p>
+
+          <div className="mt-7 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.055] backdrop-blur-md">
+            <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+              <Shield size={16} className="text-[#43C9F0]" />
+              <span className="text-xs font-semibold">Protección de acceso</span>
+            </div>
+
+            <div className="space-y-4 p-4">
+              {[
+                ["Contraseña personal", "Utiliza una clave diferente a la anterior."],
+                ["Acceso protegido", "No compartas tu contraseña con terceros."],
+                ["Credenciales seguras", "Evita información fácil de adivinar."]
+              ].map(([titulo, descripcion]) => (
+                <div key={titulo} className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#00ABE4]/10 text-[#43C9F0]">
+                    <CheckCircle2 size={18} />
+                  </span>
+                  <div>
+                    <p className="text-[13px] font-semibold text-slate-100">{titulo}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">{descripcion}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {obligatorio && (
+            <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
+              <AlertCircle size={17} className="mt-0.5 shrink-0 text-amber-300" />
+              <p className="text-xs leading-5 text-amber-100">
+                Se requiere actualizar la contraseña temporal para continuar.
+              </p>
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
+        <span className="flex items-center gap-2 text-[11px] text-slate-400">
+          <ShieldCheck size={15} className="text-[#43C9F0]" />
+          Acceso para usuarios autorizados
+        </span>
+        <span className="text-[11px] text-slate-500">
+          © {new Date().getFullYear()} AutoCore
+        </span>
+      </div>
+    </aside>
+  );
+}
+
+function PasswordField({
+  label, name, value, onChange, visible, toggle,
+  placeholder, disabled, autoComplete = "new-password"
+}) {
+  return (
+    <div>
+      <label htmlFor={name} className="mb-1.5 block text-[13px] font-semibold text-slate-700">
+        {label}
+      </label>
+      <div className="relative">
+        <Lock size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          id={name}
+          name={name}
+          type={visible ? "text" : "password"}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          disabled={disabled}
+          required
+          className={INPUT}
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={toggle}
+          aria-label={visible ? `Ocultar ${label}` : `Mostrar ${label}`}
+          aria-pressed={visible}
+          className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:text-[#0095C5]"
+        >
+          {visible ? <EyeOff size={20} /> : <Eye size={20} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CambiarPassword() {
   const navigate = useNavigate();
   const { user, login, logout } = useAuth();
+  const reduce = useReducedMotion();
+  const enviandoRef = useRef(false);
+  const obligatorio = user?.debe_cambiar_password === true;
 
   const [form, setForm] = useState({
     passwordActual: "",
     nuevaPassword: "",
     confirmarPassword: ""
   });
-
+  const [visible, setVisible] = useState({
+    passwordActual: false,
+    nuevaPassword: false,
+    confirmarPassword: false
+  });
   const [loading, setLoading] = useState(false);
-  const [verActual, setVerActual] = useState(false);
-  const [verNueva, setVerNueva] = useState(false);
-  const [verConfirmar, setVerConfirmar] = useState(false);
+  const [errorForm, setErrorForm] = useState("");
 
-  // Validación de fortaleza de contraseña
-  const [passwordStrength, setPasswordStrength] = useState(0);
+  const criterios = CRITERIOS.map(c => ({
+    ...c, ok: c.test(form.nuevaPassword)
+  }));
+  const fortaleza = criterios.filter(c => c.ok).length;
+  const coinciden = !!form.confirmarPassword &&
+    form.confirmarPassword === form.nuevaPassword;
 
-  const handleChange = (e) => {
+  const fuerzaColor = [
+    "bg-slate-200", "bg-red-500", "bg-orange-500",
+    "bg-amber-500", "bg-emerald-500"
+  ][fortaleza];
+
+  const fuerzaTexto = ["", "Débil", "Regular", "Buena", "Fuerte"][fortaleza];
+
+  const handleChange = e => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-
-    if (name === "nuevaPassword") {
-      let strength = 0;
-      if (value.length >= 8) strength++;
-      if (/[A-Z]/.test(value)) strength++;
-      if (/[0-9]/.test(value)) strength++;
-      if (/[^A-Za-z0-9]/.test(value)) strength++;
-      setPasswordStrength(strength);
-    }
+    setForm(prev => ({ ...prev, [name]: value }));
+    setErrorForm("");
   };
 
-  const getStrengthColor = () => {
-    switch (passwordStrength) {
-      case 1: return "bg-red-500";
-      case 2: return "bg-orange-500";
-      case 3: return "bg-yellow-500";
-      case 4: return "bg-green-500";
-      default: return "bg-gray-300";
-    }
-  };
+  const toggleVisible = name =>
+    setVisible(prev => ({ ...prev, [name]: !prev[name] }));
 
-  const getStrengthLabel = () => {
-    switch (passwordStrength) {
-      case 1: return "Débil";
-      case 2: return "Regular";
-      case 3: return "Buena";
-      case 4: return "Fuerte";
-      default: return "";
-    }
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
+    if (enviandoRef.current) return;
 
-    if (form.nuevaPassword !== form.confirmarPassword) {
-      toast.error("Las contraseñas no coinciden");
+    if (!form.passwordActual || !form.nuevaPassword || !form.confirmarPassword) {
+      setErrorForm("Completa todos los campos.");
       return;
     }
-
     if (form.nuevaPassword.length < 6) {
-      toast.error("La nueva contraseña debe tener al menos 6 caracteres");
+      setErrorForm("La nueva contraseña debe tener al menos 6 caracteres.");
       return;
     }
+    if (form.nuevaPassword === form.passwordActual) {
+      setErrorForm("La nueva contraseña debe ser diferente de la actual.");
+      return;
+    }
+    if (form.nuevaPassword !== form.confirmarPassword) {
+      setErrorForm("Las contraseñas no coinciden.");
+      return;
+    }
+
+    enviandoRef.current = true;
+    setLoading(true);
+    setErrorForm("");
 
     try {
-      setLoading(true);
-
       await cambiarMiPasswordRequest({
         passwordActual: form.passwordActual,
         nuevaPassword: form.nuevaPassword
@@ -80,418 +237,203 @@ export default function CambiarPassword() {
 
       const token = localStorage.getItem("token");
 
+      // Mantener contrato de autenticación utilizado en tu código.
       login({
         token,
         user: { ...user, debe_cambiar_password: false }
       });
 
       toast.success("Contraseña actualizada correctamente");
-      navigate("/");
-
-    } catch (error) {
-      toast.error(error.response?.data?.error || "No se pudo cambiar la contraseña");
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      const mensaje = err?.response?.data?.error ||
+        "No se pudo actualizar la contraseña.";
+      setErrorForm(mensaje);
+      toast.error(mensaje);
     } finally {
+      enviandoRef.current = false;
       setLoading(false);
     }
   };
 
+  const salir = async () => {
+    if (loading) return;
+    await logout();
+  };
+
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#E9F1FA] via-blue-50 to-white">
+    <main className="grid min-h-dvh w-full bg-white lg:h-dvh lg:min-h-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:overflow-hidden">
+      <BrandPanel obligatorio={obligatorio} />
 
-      {/* Partículas decorativas flotantes */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute w-64 h-64 rounded-full bg-[#00ABE4]/5"
-          style={{ top: '10%', left: '5%' }}
-          animate={{
-            y: [0, -20, 0],
-            opacity: [0.3, 0.5, 0.3]
-          }}
-          transition={{
-            duration: 8,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-48 h-48 rounded-full bg-[#00ABE4]/8"
-          style={{ top: '60%', right: '10%' }}
-          animate={{
-            y: [0, 15, 0],
-            opacity: [0.2, 0.4, 0.2]
-          }}
-          transition={{
-            duration: 6,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-32 h-32 rounded-full bg-[#00ABE4]/6"
-          style={{ bottom: '20%', left: '15%' }}
-          animate={{
-            y: [0, -10, 0],
-            opacity: [0.25, 0.45, 0.25]
-          }}
-          transition={{
-            duration: 7,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-20 h-20 rounded-full bg-[#00ABE4]/10"
-          style={{ top: '30%', right: '25%' }}
-          animate={{
-            y: [0, 12, 0],
-            opacity: [0.35, 0.55, 0.35]
-          }}
-          transition={{
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-40 h-40 rounded-full bg-[#00ABE4]/4"
-          style={{ bottom: '40%', right: '30%' }}
-          animate={{
-            y: [0, -18, 0],
-            opacity: [0.2, 0.35, 0.2]
-          }}
-          transition={{
-            duration: 9,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-3 h-3 rounded-full bg-[#00ABE4]/20"
-          style={{ top: '15%', left: '40%' }}
-          animate={{
-            y: [0, -25, 0],
-            opacity: [0.3, 0.6, 0.3]
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-2 h-2 rounded-full bg-[#00ABE4]/30"
-          style={{ top: '45%', left: '20%' }}
-          animate={{
-            y: [0, 20, 0],
-            opacity: [0.4, 0.7, 0.4]
-          }}
-          transition={{
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-4 h-4 rounded-full bg-[#00ABE4]/15"
-          style={{ bottom: '30%', right: '15%' }}
-          animate={{
-            y: [0, -15, 0],
-            opacity: [0.25, 0.5, 0.25]
-          }}
-          transition={{
-            duration: 6,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-      </div>
+      <section className="relative flex min-h-dvh min-w-0 flex-col bg-white lg:h-full lg:min-h-0 lg:overflow-y-auto">
+        <div className="pointer-events-none absolute -right-36 -top-36 h-80 w-80 rounded-full bg-sky-100/50 blur-3xl lg:hidden" />
 
-      {/* Contenido principal */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6">
+        <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 px-5 py-3 sm:px-10 lg:px-10">
+          <Link to="/" className="flex min-h-11 items-center gap-2 text-xs font-semibold text-slate-500 hover:text-[#0095C5]">
+            <CarFront size={17} /> AutoCore
+          </Link>
 
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className="w-full max-w-md bg-white rounded-3xl shadow-[0_8px_32px_rgba(0,171,228,0.15)] p-8 sm:p-10"
-        >
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-500">
+            <Lock size={13} className="text-[#0095C5]" />
+            Seguridad de cuenta
+          </span>
+        </header>
 
-          {/* Header */}
-          <div className="text-center mb-8">
-            {/* Logo clickeable que redirige al Landing */}
-            <Link to="/" className="inline-block">
-              <motion.div
-                className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E9F1FA] to-[#00ABE4]/10 border-2 border-[#00ABE4]/20 mb-6 cursor-pointer"
-                animate={{
-                  boxShadow: [
-                    "0 0 0 0 rgba(0, 171, 228, 0.2)",
-                    "0 0 0 8px rgba(0, 171, 228, 0)",
-                  ]
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeOut"
-                }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <motion.svg
-                  className="w-10 h-10 text-[#00ABE4]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  animate={{ scale: [1, 1.02, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                </motion.svg>
-              </motion.div>
-            </Link>
+        <div className="relative z-10 flex flex-1 items-center justify-center px-5 py-4 sm:px-10 lg:px-10">
+          <motion.div
+            initial={reduce ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduce ? 0 : 0.4 }}
+            className="w-full max-w-[420px]"
+          >
+            <div className="mb-5">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 text-[#0095C5]">
+                <Fingerprint size={24} />
+              </div>
 
-            <h1 className="text-3xl sm:text-4xl font-bold text-[#1e293b] mb-2">
-              Nueva Contraseña
-            </h1>
-            <p className="text-[#64748b] text-sm">
-              Crea una contraseña segura para proteger tu cuenta del sistema.
-            </p>
-          </div>
-
-          {/* Indicador de cambio obligatorio */}
-          <div className="flex items-start gap-3 bg-[#00ABE4]/10 border border-[#00ABE4]/20 rounded-2xl p-4 mb-6">
-            <svg className="w-5 h-5 text-[#00ABE4] mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-            <div>
-              <p className="text-[#1e293b] text-sm font-medium">Contraseña temporal</p>
-              <p className="text-[#64748b] text-xs mt-0.5">
-                Tu cuenta fue creada con una contraseña provisional. Debes cambiarla antes de continuar.
+              <h1 className="text-[27px] font-extrabold tracking-tight text-slate-900 sm:text-[30px]">
+                Cambiar contraseña
+              </h1>
+              <p className="mt-2 text-[13px] leading-5 text-slate-500">
+                Actualiza tu contraseña para mantener protegido tu acceso.
               </p>
             </div>
-          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-
-            {/* Contraseña actual */}
-            <div>
-              <label className="block text-sm font-medium text-[#1e293b] mb-2">
-                Contraseña actual
-              </label>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                  </svg>
+            {obligatorio && (
+              <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-sky-100 bg-sky-50 p-3">
+                <AlertCircle size={17} className="mt-0.5 shrink-0 text-[#0095C5]" />
+                <div>
+                  <p className="text-xs font-bold text-slate-800">
+                    Cambio de contraseña obligatorio
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-slate-600">
+                    Debes reemplazar tu contraseña temporal antes de continuar.
+                  </p>
                 </div>
-                <input
-                  type={verActual ? "text" : "password"}
-                  name="passwordActual"
-                  value={form.passwordActual}
-                  onChange={handleChange}
-                  required
-                  placeholder="Ingresa tu contraseña actual"
-                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-12 text-[#1e293b] placeholder-[#64748b]/60 focus:outline-none focus:border-[#00ABE4] focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,171,228,0.15)] transition-all duration-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => setVerActual(!verActual)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60 hover:text-[#00ABE4] transition-colors"
-                >
-                  {verActual ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                </button>
               </div>
-            </div>
+            )}
 
-            {/* Nueva contraseña */}
-            <div>
-              <label className="block text-sm font-medium text-[#1e293b] mb-2">
-                Nueva contraseña
-              </label>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                  </svg>
-                </div>
-                <input
-                  type={verNueva ? "text" : "password"}
-                  name="nuevaPassword"
-                  value={form.nuevaPassword}
-                  onChange={handleChange}
-                  required
-                  minLength={6}
-                  placeholder="Crea una nueva contraseña"
-                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-12 text-[#1e293b] placeholder-[#64748b]/60 focus:outline-none focus:border-[#00ABE4] focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,171,228,0.15)] transition-all duration-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => setVerNueva(!verNueva)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60 hover:text-[#00ABE4] transition-colors"
-                >
-                  {verNueva ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              <PasswordField
+                label="Contraseña actual"
+                name="passwordActual"
+                value={form.passwordActual}
+                onChange={handleChange}
+                visible={visible.passwordActual}
+                toggle={() => toggleVisible("passwordActual")}
+                placeholder="Contraseña actual"
+                autoComplete="current-password"
+                disabled={loading}
+              />
 
-              {/* Indicador de fortaleza */}
+              <PasswordField
+                label="Nueva contraseña"
+                name="nuevaPassword"
+                value={form.nuevaPassword}
+                onChange={handleChange}
+                visible={visible.nuevaPassword}
+                toggle={() => toggleVisible("nuevaPassword")}
+                placeholder="Crea una nueva contraseña"
+                disabled={loading}
+              />
+
               {form.nuevaPassword && (
-                <div className="mt-3 space-y-2">
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4].map((nivel) => (
-                      <div
-                        key={nivel}
-                        className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                          nivel <= passwordStrength ? getStrengthColor() : "bg-gray-200"
-                        }`}
-                      ></div>
+                <div className="space-y-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-600">
+                      Seguridad de contraseña
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-700">
+                      {fuerzaTexto}
+                    </span>
+                  </div>
+
+                  <div className="flex gap-1.5">
+                    {[1, 2, 3, 4].map(n => (
+                      <span key={n} className={`h-1.5 flex-1 rounded-full ${
+                        n <= fortaleza ? fuerzaColor : "bg-slate-200"
+                      }`} />
                     ))}
                   </div>
-                  {passwordStrength > 0 && (
-                    <p className={`text-xs font-medium transition-colors ${
-                      passwordStrength <= 2 ? "text-red-500" : passwordStrength === 3 ? "text-yellow-500" : "text-green-500"
-                    }`}>
-                      Fortaleza: {getStrengthLabel()}
-                    </p>
-                  )}
+
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                    {criterios.map(c => (
+                      <div key={c.label}
+                        className={`flex items-center gap-1 text-[10px] ${
+                          c.ok ? "text-emerald-700" : "text-slate-500"
+                        }`}>
+                        {c.ok ? <Check size={12} /> : <X size={12} />}
+                        {c.label}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
 
-            {/* Confirmar contraseña */}
-            <div>
-              <label className="block text-sm font-medium text-[#1e293b] mb-2">
-                Confirmar nueva contraseña
-              </label>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                  </svg>
-                </div>
-                <input
-                  type={verConfirmar ? "text" : "password"}
-                  name="confirmarPassword"
-                  value={form.confirmarPassword}
-                  onChange={handleChange}
-                  required
-                  minLength={6}
-                  placeholder="Repite la nueva contraseña"
-                  className={`w-full rounded-2xl py-4 pl-12 pr-12 text-[#1e293b] placeholder-[#64748b]/60 focus:outline-none transition-all duration-300 ${
-                    form.confirmarPassword
-                      ? form.confirmarPassword === form.nuevaPassword
-                        ? "bg-green-50 border-2 border-green-500 focus:border-green-500 focus:bg-green-50 focus:shadow-[0_0_0_4px_rgba(34,197,94,0.15)]"
-                        : "bg-red-50 border-2 border-red-500 focus:border-red-500 focus:bg-red-50 focus:shadow-[0_0_0_4px_rgba(239,68,68,0.15)]"
-                      : "bg-gray-50 border-2 border-gray-100 focus:border-[#00ABE4] focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,171,228,0.15)]"
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setVerConfirmar(!verConfirmar)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60 hover:text-[#00ABE4] transition-colors"
-                >
-                  {verConfirmar ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
+              <PasswordField
+                label="Confirmar nueva contraseña"
+                name="confirmarPassword"
+                value={form.confirmarPassword}
+                onChange={handleChange}
+                visible={visible.confirmarPassword}
+                toggle={() => toggleVisible("confirmarPassword")}
+                placeholder="Repite la nueva contraseña"
+                disabled={loading}
+              />
 
-              {/* Validación visual */}
               {form.confirmarPassword && (
-                <div className="mt-2 flex items-center gap-2">
-                  {form.confirmarPassword === form.nuevaPassword ? (
-                    <>
-                      <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                      <span className="text-xs text-green-500 font-medium">Las contraseñas coinciden</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      <span className="text-xs text-red-500 font-medium">Las contraseñas no coinciden</span>
-                    </>
-                  )}
+                <p className={`flex items-center gap-1.5 text-[11px] font-medium ${
+                  coinciden ? "text-emerald-600" : "text-red-600"
+                }`}>
+                  {coinciden ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  {coinciden
+                    ? "Las contraseñas coinciden"
+                    : "Las contraseñas no coinciden"}
+                </p>
+              )}
+
+              {errorForm && (
+                <div role="alert"
+                  className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">
+                  <AlertCircle size={17} className="shrink-0 text-red-500" />
+                  {errorForm}
                 </div>
               )}
-            </div>
 
-            {/* Botón actualizar */}
-            <motion.button
-              type="submit"
-              disabled={loading}
-              whileHover={{ scale: loading ? 1 : 1.02 }}
-              whileTap={{ scale: loading ? 1 : 0.98 }}
-              className="w-full relative overflow-hidden bg-gradient-to-r from-[#00ABE4] to-[#0090c4] hover:from-[#00ABE4] hover:to-[#007ba3] disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-2xl py-4 transition-all duration-300 shadow-lg shadow-[#00ABE4]/25 disabled:shadow-none disabled:cursor-not-allowed"
-            >
-              <span className="relative z-10 flex items-center justify-center gap-2">
+              <motion.button
+                type="submit"
+                disabled={loading}
+                whileHover={reduce || loading ? undefined : { y: -1 }}
+                whileTap={reduce || loading ? undefined : { scale: 0.99 }}
+                className="flex h-[52px] w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#00ABE4] to-[#0095C5] px-4 text-sm font-bold text-white shadow-lg shadow-sky-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
                 {loading ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Actualizando...</span>
-                  </>
+                  <><Loader2 size={18} className="animate-spin" /> Actualizando...</>
                 ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Actualizar Contraseña</span>
-                  </>
+                  <><KeyRound size={18} /> Actualizar contraseña <ArrowRight size={17} /></>
                 )}
-              </span>
-            </motion.button>
-          </form>
+              </motion.button>
+            </form>
 
-          {/* Botón cerrar sesión */}
-          <button
-            type="button"
-            onClick={logout}
-            className="w-full mt-4 flex items-center justify-center gap-2 border-2 border-gray-100 text-[#64748b] hover:bg-gray-50 hover:border-[#00ABE4]/30 hover:text-[#00ABE4] rounded-2xl py-3 transition-all duration-300"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-            </svg>
-            <span className="text-sm font-medium">Cerrar sesión</span>
-          </button>
+            <button type="button"
+              disabled={loading}
+              onClick={salir}
+              className="mt-3 flex min-h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+              <LogOut size={16} /> Cerrar sesión
+            </button>
 
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <p className="text-[#64748b] text-xs">
-              Tu nueva contraseña debe tener al menos 6 caracteres
+            <p className="mt-4 text-center text-[11px] text-slate-400">
+              No compartas tu contraseña con otras personas.
             </p>
-          </div>
+          </motion.div>
+        </div>
 
-        </motion.div>
-      </div>
-    </div>
+        <footer className="relative z-10 shrink-0 px-5 py-3 text-center">
+          <p className="text-[11px] text-slate-400">
+            © {new Date().getFullYear()} AutoCore · Centro de Operaciones Vehiculares
+          </p>
+        </footer>
+      </section>
+    </main>
   );
 }

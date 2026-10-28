@@ -1,37 +1,94 @@
+
 import { useEffect, useState, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
-import { Clock3, ShieldCheck, AlertTriangle, RefreshCcw } from "lucide-react";
-import { getLocalSession, saveLocalSession, obtenerEstadoSesionRunt } from "../services/sessionRunt";
+import {
+  Clock3, ShieldCheck, AlertTriangle, RefreshCcw
+} from "lucide-react";
+import {
+  getLocalSession,
+  saveLocalSession,
+  obtenerEstadoSesionRunt
+} from "../services/sessionRunt";
 
 const LOCAL_API_BASE = "http://localhost:3000";
 
-export default function RuntSessionStatus({ compact = false, iconOnly = false }) {
-  const [session, setSession] = useState(() => getLocalSession() || null);
-  const [loading, setLoading] = useState(false);
-  const alertShownRef = useRef(false);
+const ESTADOS = {
+  vencida: {
+    texto: "Sesión vencida",
+    icono: AlertTriangle,
+    color: "text-red-600 dark:text-red-400",
+    fondo: "bg-red-50 dark:bg-red-500/10",
+    borde: "border-red-200 dark:border-red-500/20",
+    barra: "bg-red-500"
+  },
+  alerta: {
+    texto: "Tiempo bajo",
+    icono: Clock3,
+    color: "text-amber-600 dark:text-amber-400",
+    fondo: "bg-amber-50 dark:bg-amber-500/10",
+    borde: "border-amber-200 dark:border-amber-500/20",
+    barra: "bg-amber-500"
+  },
+  activa: {
+    texto: "Sesión activa",
+    icono: ShieldCheck,
+    color: "text-emerald-600 dark:text-emerald-400",
+    fondo: "bg-emerald-50 dark:bg-emerald-500/10",
+    borde: "border-emerald-200 dark:border-emerald-500/20",
+    barra: "bg-emerald-500"
+  }
+};
 
+// El modo predeterminado ya no dibuja una tarjeta grande.
+export default function RuntSessionStatus({
+  compact = false,
+  iconOnly = false
+}) {
+  if (!compact && !iconOnly) return null;
+
+  return (
+    <SessionIndicator
+      compact={compact}
+      iconOnly={iconOnly}
+    />
+  );
+}
+
+function SessionIndicator({ compact, iconOnly }) {
+  const [session, setSession] = useState(
+    () => getLocalSession() || null
+  );
+  const [loading, setLoading] = useState(false);
+  const alertaMostrada = useRef(false);
+
+  // CONSULTA AL BACKEND CADA 15 SEGUNDOS
   const actualizarEstado = useCallback(async () => {
     try {
       const data = await obtenerEstadoSesionRunt();
+
       if (data?.ok && data?.session) {
         setSession(data.session);
-        if (data.session?.sessionStartedAt) {
+
+        if (data.session.sessionStartedAt) {
           saveLocalSession(data.session);
         }
       }
     } catch (err) {
-      console.warn("No se pudo obtener estado de sesión RUNT:", err.message);
+      console.warn(
+        "No se pudo obtener estado de sesión RUNT:",
+        err?.message
+      );
     }
   }, []);
 
-  // El restante se recalcula desde localStorage. Si solo se confia en el fetch,
-  // cuando el backend no responde setSession no se ejecuta nunca y el contador
-  // queda congelado en el ultimo valor recibido (p. ej. 60 recien registrado).
+  // RECÁLCULO LOCAL CADA 30 SEGUNDOS
   const recalcularLocal = useCallback(() => {
     const local = getLocalSession();
+
     setSession(prev => {
       if (local) return { ...(prev || {}), ...local };
       if (!prev) return prev;
+
       return {
         ...prev,
         activa: false,
@@ -43,138 +100,195 @@ export default function RuntSessionStatus({ compact = false, iconOnly = false })
     });
   }, []);
 
+  // ABRIR EL REGISTRO DE SESIÓN
   const registrarSesion = () => {
+    if (loading) return;
+
     const ventana = window.open(
       `${LOCAL_API_BASE}/api/runt-session/iniciar`,
       "runtSession",
       "width=420,height=200"
     );
+
     if (!ventana) {
-      toast.error("Bloqueador de popups detectado. Permite popups para esta página.");
+      toast.error(
+        "Permite las ventanas emergentes para registrar la sesión RUNT."
+      );
       return;
     }
+
     setLoading(true);
   };
 
+  // RECIBIR RESPUESTA DEL REGISTRO
   useEffect(() => {
-    const handler = (event) => {
+    const handler = event => {
       if (event.origin !== LOCAL_API_BASE) return;
-      if (event.data?.type === "runt-session-iniciada" && event.data?.payload?.session) {
+
+      if (
+        event.data?.type === "runt-session-iniciada" &&
+        event.data?.payload?.session
+      ) {
         saveLocalSession(event.data.payload.session);
         setSession(getLocalSession());
-        toast.success("Sesión RUNT registrada");
         setLoading(false);
+        toast.success("Sesión RUNT registrada");
       }
     };
+
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, []);
 
   useEffect(() => {
     actualizarEstado();
-    const interval = setInterval(actualizarEstado, 15000);
-    return () => clearInterval(interval);
+
+    const intervalo = setInterval(actualizarEstado, 15000);
+    return () => clearInterval(intervalo);
   }, [actualizarEstado]);
 
   useEffect(() => {
-    const tick = setInterval(recalcularLocal, 30000);
-    return () => clearInterval(tick);
+    const intervalo = setInterval(recalcularLocal, 30000);
+    return () => clearInterval(intervalo);
   }, [recalcularLocal]);
 
-  const activa = session?.activa;
-  const minutos = session?.minutosRestantes || 0;
-  const capacidad = session?.capacidadSegura || 0;
+  // ESTADO VISUAL
+  const activa = Boolean(session?.activa);
+  const minutos = Number(session?.minutosRestantes) || 0;
+  const capacidad = Number(session?.capacidadSegura) || 0;
 
-  useEffect(() => {
-    if (activa && minutos <= 5 && minutos > 0 && !alertShownRef.current) {
-      alertShownRef.current = true;
-      toast.error(
-        `La sesión RUNT expira en ${minutos} minuto${minutos !== 1 ? "s" : ""}. Renueva ahora.`,
-        { duration: 8000, icon: <AlertTriangle size={20} className="text-amber-500" /> }
-      );
-    }
-    if (minutos > 5) {
-      alertShownRef.current = false;
-    }
-  }, [activa, minutos]);
+  const estado = ESTADOS[
+    !activa ? "vencida" : minutos <= 15 ? "alerta" : "activa"
+  ];
 
-  const statusStyle = !activa
-    ? {
-        wrapper: "bg-[#dc2626]/10 text-[#dc2626] border-[#dc2626]/20",
-        icon: AlertTriangle,
-        label: "Sesión vencida"
-      }
-    : minutos <= 15
-      ? {
-          wrapper: "bg-[#d97706]/10 text-[#d97706] border-[#d97706]/20",
-          icon: Clock3,
-          label: "Tiempo bajo"
-        }
-      : {
-          wrapper: "bg-[#059669]/10 text-[#059669] border-[#059669]/20",
-          icon: ShieldCheck,
-          label: "Sesión activa"
-        };
-
-  const Icon = statusStyle.icon;
-
+  const Icono = estado.icono;
   const porcentaje = activa
-    ? Math.max(Math.min((minutos / 60) * 100, 100), 0)
+    ? Math.max(0, Math.min(100, (minutos / 60) * 100))
     : 0;
 
-  if (iconOnly) {
-    const LoadingIcon = loading ? RefreshCcw : Icon;
+  // ALERTAR CUANDO RESTEN 5 MINUTOS
+  useEffect(() => {
+    if (
+      activa &&
+      minutos > 0 &&
+      minutos <= 5 &&
+      !alertaMostrada.current
+    ) {
+      alertaMostrada.current = true;
 
+      toast.error(
+        `La sesión RUNT expira en ${minutos} minuto${minutos !== 1 ? "s" : ""}. Renueva ahora.`,
+        {
+          duration: 8000,
+          icon: <AlertTriangle size={20} className="text-amber-500" />
+        }
+      );
+    }
+
+    if (minutos > 5) alertaMostrada.current = false;
+  }, [activa, minutos]);
+
+  // ==========================================
+  // ICONO PEQUEÑO - HEADER
+  // ==========================================
+  if (iconOnly) {
     return (
       <button
+        type="button"
         onClick={registrarSesion}
         disabled={loading}
-        title={`${statusStyle.label} · ${minutos} min restantes · Clic para renovar sesión`}
+        title={`${estado.texto} · ${minutos} min · Renovar sesión RUNT`}
+        aria-label={`${estado.texto}. ${minutos} minutos restantes. Renovar sesión RUNT`}
         className={`
-          w-10 h-10 rounded-xl border flex items-center justify-center shrink-0
-          transition-colors disabled:opacity-60
-          ${statusStyle.wrapper}
+          relative flex h-10 w-10 shrink-0 items-center
+          justify-center rounded-xl border transition-colors
+          disabled:cursor-not-allowed disabled:opacity-60
+          ${estado.fondo} ${estado.borde} ${estado.color}
         `}
       >
-        <LoadingIcon size={20} className={loading ? "animate-spin" : ""} />
+        {loading
+          ? <RefreshCcw size={19} className="animate-spin" />
+          : <Icono size={19} />
+        }
+
+        <span
+          aria-hidden="true"
+          className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-[#172539] ${estado.barra}`}
+        />
       </button>
     );
   }
 
+  // ==========================================
+  // TARJETA COMPACTA - SIDEBAR
+  // ==========================================
   if (compact) {
     return (
       <div
         className={`
-          border rounded-2xl px-3 py-2 min-w-[260px]
-          ${statusStyle.wrapper}
+          w-full min-w-0 rounded-2xl border p-3
+          ${estado.fondo} ${estado.borde}
         `}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Icon size={18} />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div
+              className={`
+                flex h-10 w-10 shrink-0 items-center
+                justify-center rounded-xl
+                bg-white/80 dark:bg-[#172539]
+                ${estado.color}
+              `}
+            >
+              <Icono size={20} />
+            </div>
+
             <div className="min-w-0">
-              <p className="text-xs font-bold truncate">
-                {statusStyle.label}
+              <p className={`truncate text-xs font-bold ${estado.color}`}>
+                {estado.texto}
               </p>
-              <p className="text-xs truncate">
-                {minutos} min · {capacidad} consultas seguras
+
+              <p className="mt-1 truncate text-[11px] text-slate-600 dark:text-slate-400">
+                {minutos} min · {capacidad} consultas
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={registrarSesion}
             disabled={loading}
-            title="Registrar nuevo inicio de sesión RUNT"
-            className="shrink-0 bg-white/80 hover:bg-[#E9F1FA] rounded-xl p-2 text-[#1e293b] disabled:opacity-60"
+            title="Renovar sesión RUNT"
+            aria-label="Renovar sesión RUNT"
+            className="
+              flex h-11 w-11 shrink-0 touch-manipulation
+              items-center justify-center rounded-xl border
+              border-slate-200 bg-white text-slate-700
+              hover:border-sky-300 hover:text-[#0095C5]
+              disabled:cursor-not-allowed disabled:opacity-60
+              dark:border-slate-700 dark:bg-[#111F32]
+              dark:text-slate-200
+            "
           >
-            <RefreshCcw size={15} className={loading ? "animate-spin" : ""} />
+            <RefreshCcw
+              size={18}
+              className={loading ? "animate-spin" : ""}
+            />
           </button>
         </div>
 
-        <div className="mt-2 h-1.5 rounded-full bg-white/70 overflow-hidden">
+        <div className="mt-3 flex items-center justify-between text-[11px]">
+          <span className="font-medium text-slate-500 dark:text-slate-400">
+            Tiempo disponible
+          </span>
+          <span className={`font-bold ${estado.color}`}>
+            {minutos} min
+          </span>
+        </div>
+
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/70 dark:bg-slate-700">
           <div
-            className="h-full rounded-full bg-current transition-all duration-500"
+            className={`h-full rounded-full transition-all duration-500 ${estado.barra}`}
             style={{ width: `${porcentaje}%` }}
           />
         </div>
@@ -182,46 +296,5 @@ export default function RuntSessionStatus({ compact = false, iconOnly = false })
     );
   }
 
-  return (
-    <div className={`rounded-2xl px-4 py-4 border ${statusStyle.wrapper}`}>
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Icon size={22} />
-
-          <div>
-            <p className="font-bold text-sm">Estado sesión RUNT</p>
-            <p className="text-sm mt-1">
-              {session?.mensaje || "Sesión no registrada"}
-            </p>
-            <p className="text-xs mt-1">
-              Capacidad segura: {capacidad} consultas
-            </p>
-          </div>
-        </div>
-
-        <div className="w-full lg:w-80">
-          <div className="flex justify-between text-xs mb-1">
-            <span>Tiempo disponible</span>
-            <span className="text-[#00ABE4] font-semibold">{minutos} min</span>
-          </div>
-
-          <div className="w-full h-2 bg-white/70 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[#00ABE4] rounded-full transition-all duration-500"
-              style={{ width: `${porcentaje}%` }}
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={registrarSesion}
-          disabled={loading}
-          className="bg-[#00ABE4] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#0095C5] disabled:opacity-60 flex items-center justify-center gap-2"
-        >
-          <RefreshCcw size={15} className={loading ? "animate-spin" : ""} />
-          {loading ? "Registrando..." : "Registrar sesión"}
-        </button>
-      </div>
-    </div>
-  );
+  return null;
 }

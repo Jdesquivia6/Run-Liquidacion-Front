@@ -1,33 +1,32 @@
-import { useState, useEffect, useRef } from "react";
+
+import { useState, useEffect, useRef, useCallback } from "react";
 import Header from "../components/Header";
 import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
 import { API_BASE } from "../services/liquidacionApi";
 import { crearJob, obtenerDetalleJob } from "../services/workerJobsApi";
-import Swal from "sweetalert2";
-import axios from "axios";
 import JobProgress from "../components/JobProgress";
-import Pagination from "../components/Pagination";
+import Swal from "sweetalert2";
 import { v4 as uuidv4 } from "uuid";
-import {
-  Loader2, FileText, CheckCircle2, AlertCircle,
-  Plus, Trash2, ShoppingCart, Download, ReceiptText,
-  Package, AlertTriangle, CircleCheck, Printer,
-  Volume2, VolumeX, Lightbulb
-} from "lucide-react";
 import toast from "react-hot-toast";
+import {
+  Loader2, FileText, CheckCircle2, AlertCircle, Plus,
+  Trash2, ShoppingCart, Download, ReceiptText, Package,
+  AlertTriangle, Printer, Volume2, VolumeX, Lightbulb,
+  ChevronLeft, ChevronRight, ClipboardCheck, X
+} from "lucide-react";
 import sonidoLiquidacion from "../assets/sonidoLiquidacion.mp3";
 
-// ─────────────────────────────────────────────
+// ======================================================
 // CONFIGURACIÓN
-// ─────────────────────────────────────────────
+// ======================================================
 
-const TRAMITES_DISPONIBLES = [
+const TRAMITES = [
   { value: "TRÁMITE MATRÍCULA INICIAL", label: "MATRÍCULA INICIAL" },
   { value: "TRÁMITE INSCRIPCIÓN ALERTA", label: "PIGNORADO" }
 ];
 
-const CLASIFICACIONES_DISPONIBLES = [
+const CLASIFICACIONES = [
   { value: "AUTOMOVIL", label: "AUTOMOVIL" },
   { value: "MEDIDAS CAUTELARES", label: "MEDIDAS CAUTELARES" },
   { value: "MOTO", label: "MOTO" },
@@ -35,245 +34,281 @@ const CLASIFICACIONES_DISPONIBLES = [
 ];
 
 const MAX_CARRITO = 40;
+const POR_PAGINA = 10;
 
-// ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
+const CARD = "rounded-2xl border border-slate-200 bg-white shadow-sm";
+const BTN = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50";
+const PRIMARY = `${BTN} bg-[#00ABE4] text-white hover:bg-[#0095C5]`;
+const OUTLINE = `${BTN} border border-slate-200 bg-white text-slate-600 hover:bg-slate-50`;
 
-function labelTramite(value) {
-  return TRAMITES_DISPONIBLES.find(t => t.value === value)?.label || value;
+const labelTramite = valor =>
+  TRAMITES.find(t => t.value === valor)?.label || valor;
+
+const escapeHtml = valor => String(valor ?? "").replace(
+  /[&<>"']/g,
+  c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;",
+    '"': "&quot;", "'": "&#39;"
+  })[c]
+);
+
+const fechaHoy = () => new Date().toISOString().slice(0, 10);
+
+// ======================================================
+// PAGINACIÓN COMPACTA
+// ======================================================
+
+function Paginacion({ pagina, total, cambiar }) {
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+  if (total <= POR_PAGINA) return null;
+
+  const inicio = (pagina - 1) * POR_PAGINA + 1;
+  const fin = Math.min(pagina * POR_PAGINA, total);
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+      <p className="text-xs text-slate-500">
+        Mostrando <strong>{inicio} a {fin}</strong> de {total}
+      </p>
+      <div className="flex items-center gap-2">
+        <button type="button" aria-label="Página anterior"
+          disabled={pagina <= 1}
+          onClick={() => cambiar(p => Math.max(1, p - 1))}
+          className={`${OUTLINE} !px-3 disabled:opacity-40`}>
+          <ChevronLeft size={15} />
+        </button>
+        <span className="text-xs font-semibold text-slate-600">
+          Página {pagina} de {paginas}
+        </span>
+        <button type="button" aria-label="Página siguiente"
+          disabled={pagina >= paginas}
+          onClick={() => cambiar(p => Math.min(paginas, p + 1))}
+          className={`${OUTLINE} !px-3 disabled:opacity-40`}>
+          <ChevronRight size={15} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function formatBytes(bytes) {
-  if (!bytes) return "N/A";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-// ─────────────────────────────────────────────
-// COMPONENTES INTERNOS
-// ─────────────────────────────────────────────
+// ======================================================
+// ENCABEZADO
+// ======================================================
 
 function PageHeader({ totalPlacas, totalTramites }) {
   return (
-    <div className="bg-gradient-to-br from-[#00ABE4] to-[#0095C5] rounded-[28px] shadow-lg shadow-[#00ABE4]/20 p-6 md:p-8 relative overflow-hidden">
-      {/* Ícono decorativo semitransparente */}
-      <div className="absolute right-4 bottom-3 opacity-10 select-none pointer-events-none hidden md:block">
-        <ReceiptText className="w-40 h-40" />
-      </div>
-      <div className="absolute right-6 top-6 opacity-10 select-none pointer-events-none md:hidden">
-        <ReceiptText className="w-20 h-20" />
-      </div>
+    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#00ABE4] to-[#0095C5] px-6 py-5 text-white shadow-lg md:px-8">
+      <ReceiptText size={110}
+        className="pointer-events-none absolute right-6 top-1/2 hidden -translate-y-1/2 opacity-15 md:block" />
 
-      {/* Contenido principal */}
       <div className="relative z-10">
-        {/* Label superior */}
-        <div className="flex items-center gap-1.5 mb-3">
-          <FileText className="w-3.5 h-3.5 text-white/80" />
-          <span className="text-xs font-medium text-white/80 uppercase tracking-wider">
-            Liquidaciones RUNT
-          </span>
-        </div>
-
-        {/* Título y descripción */}
-        <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight">
-          Liquidar valores RUNT
-        </h2>
-        <p className="mt-2 text-sm md:text-base text-white/80 max-w-xl leading-relaxed">
-          Agregue placas, seleccione trámites y genere liquidaciones masivas de forma automática.
+        <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-sky-100">
+          <FileText size={15} /> LIQUIDACIONES RUNT
         </p>
 
-        {/* Badges de resumen, solo si hay items */}
+        <h1 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">
+          Liquidar valores RUNT
+        </h1>
+
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-sky-50">
+          Agregue placas, seleccione trámites y genere liquidaciones
+          masivas de forma automática.
+        </p>
+
         {totalPlacas > 0 && (
-          <div className="flex items-center gap-2 mt-4 flex-wrap">
-            <span className="bg-white/20 backdrop-blur text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-              <ShoppingCart size={12} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold">
+              <ShoppingCart size={13} />
               {totalPlacas} placa{totalPlacas !== 1 ? "s" : ""}
             </span>
-            <span className="bg-white/20 backdrop-blur text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-              <FileText size={12} />
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold">
+              <FileText size={13} />
               {totalTramites} trámite{totalTramites !== 1 ? "s" : ""}
             </span>
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
-function AlertBanner({ message }) {
-  return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2">
-      <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-      <p className="text-xs text-amber-700 leading-relaxed">{message}</p>
-    </div>
-  );
-}
+// ======================================================
+// FORMULARIO
+// ======================================================
 
-function HelpText({ children }) {
-  return (
-    <div className="mt-3 px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl">
-      <p className="text-xs text-[#64748b] leading-relaxed">{children}</p>
-    </div>
-  );
-}
-
-function AddPlateCard({
-  placaInput, setPlacaInput,
-  tramiteActual, setTramiteActual,
-  clasificacionActual, setClasificacionActual,
-  onAgregar,
-  onBorrarCampos,
-  disabled
+function Formulario({
+  placa, setPlaca, tramite, setTramite,
+  clasificacion, setClasificacion,
+  agregar, limpiar, disabled
 }) {
-  const handlePlacaChange = (e) => {
-    setPlacaInput(e.target.value);
-  };
-
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div className="mb-1">
-        <h3 className="text-sm font-semibold text-[#1e293b]">
+    <section className={`${CARD} p-4 md:p-5`}>
+      <div className="mb-4">
+        <h2 className="text-sm font-bold text-slate-900">
           Agregar placa y trámite
-        </h3>
-        <p className="text-xs text-[#64748b] mt-0.5">
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">
           Seleccione la placa, el trámite y la clasificación correspondiente.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <InputField
           label="Placa *"
           name="placaInput"
-          value={placaInput}
-          onChange={handlePlacaChange}
+          value={placa}
+          onChange={e => setPlaca(e.target.value)}
           placeholder="Ej: ABC123"
         />
-
         <SelectField
           label="Trámite *"
           name="tramiteActual"
-          value={tramiteActual}
-          onChange={(e) => setTramiteActual(e.target.value)}
-          options={TRAMITES_DISPONIBLES}
+          value={tramite}
+          onChange={e => setTramite(e.target.value)}
+          options={TRAMITES}
         />
-
         <SelectField
           label="Clasificación *"
           name="clasificacionActual"
-          value={clasificacionActual}
-          onChange={(e) => setClasificacionActual(e.target.value)}
-          options={CLASIFICACIONES_DISPONIBLES}
+          value={clasificacion}
+          onChange={e => setClasificacion(e.target.value)}
+          options={CLASIFICACIONES}
         />
 
         <div className="flex items-end gap-2">
-          <button
-            onClick={onAgregar}
-            disabled={disabled}
-            className="flex-1 bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed"
-          >
-            <Plus className="w-4 h-4" />
-            Agregar
+          <button type="button" onClick={agregar} disabled={disabled}
+            className={`${PRIMARY} min-h-[46px] flex-1`}>
+            <Plus size={17} /> Agregar
           </button>
-          <button
-            type="button"
-            onClick={onBorrarCampos}
-            className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95"
-            title="Borrar campos"
-          >
-            <Trash2 className="w-4 h-4" />
-            
+          <button type="button" onClick={limpiar}
+            disabled={disabled} title="Limpiar campos"
+            className={`${BTN} min-h-[46px] border border-red-200 bg-red-50 text-red-600 hover:bg-red-100`}>
+            <Trash2 size={16} />
           </button>
         </div>
       </div>
 
-      <HelpText>
-        <Lightbulb size={14} className="inline mr-1 text-amber-500" />
-        Para agregar varios trámites a una misma placa, no cambie el campo de placa entre cada "Agregar".
-        Para una placa nueva, simplemente escriba otra placa y agregue.
-      </HelpText>
+      <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <Lightbulb size={16} className="mt-0.5 shrink-0 text-amber-500" />
+        <p className="text-xs leading-relaxed text-slate-600">
+          Para agregar varios trámites a una misma placa, mantenga la placa
+          y seleccione otro trámite. Para una nueva, escriba otra placa.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ======================================================
+// AVISO DE TARIFAS
+// ======================================================
+
+function AvisoTarifas() {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-600" />
+      <div>
+        <p className="text-xs font-bold text-amber-800">
+          Información importante sobre liquidaciones
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-amber-700">
+          La tarifa se selecciona automáticamente según el trámite y la
+          clasificación. Para MEDIDAS CAUTELARES, deberá aceptar manualmente
+          el mensaje que muestra RUNT. Máximo 40 placas por lote.
+        </p>
+      </div>
     </div>
   );
 }
 
-function CartTable({ items, totalTramites, onEliminarItem, onEliminarTramite, onLimpiarTodo }) {
-  if (items.length === 0) return null;
+// ======================================================
+// CARRITO
+// ======================================================
 
-  const [page, setPage] = useState(1);
-  const itemsPerPage = 15;
-  const totalPages = Math.ceil(items.length / itemsPerPage);
-  useEffect(() => { if (page > totalPages) setPage(1); }, [items.length]);
-  const paginatedItems = items.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+function Carrito({
+  items, totalTramites, eliminar, eliminarTramite,
+  limpiar, disabled
+}) {
+  const [pagina, setPagina] = useState(1);
+  const totalPaginas = Math.max(1, Math.ceil(items.length / POR_PAGINA));
+
+  useEffect(() => {
+    setPagina(p => Math.min(p, totalPaginas));
+  }, [totalPaginas]);
+
+  if (!items.length) return null;
+
+  const visibles = items.slice(
+    (pagina - 1) * POR_PAGINA,
+    pagina * POR_PAGINA
+  );
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#1e293b] flex items-center gap-2">
-          <ShoppingCart className="w-4 h-4 text-[#00ABE4]" />
-          Carrito de liquidaciones
-          <span className="text-xs text-[#64748b] font-normal">
-            · {items.length} placa{items.length !== 1 ? "s" : ""} · {totalTramites} trámite{totalTramites !== 1 ? "s" : ""}
-          </span>
-        </h3>
-        <button
-          onClick={onLimpiarTodo}
-          className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all"
-        >
-          Limpiar todo
+    <section className={`${CARD} p-4 md:p-5`}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+            <ShoppingCart size={17} className="text-[#00ABE4]" />
+            Carrito de liquidaciones
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            {items.length} placas · {totalTramites} trámites
+          </p>
+        </div>
+
+        <button type="button" disabled={disabled}
+          onClick={limpiar}
+          className={`${BTN} bg-red-50 text-red-600 hover:bg-red-100`}>
+          <Trash2 size={14} /> Limpiar todo
         </button>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100">
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">#</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Placa</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Trámites</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Clasificación</th>
-              <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#94a3b8]">Acción</th>
+        <table className="w-full min-w-[560px] text-sm">
+          <thead className="bg-[#E9F1FA]">
+            <tr>
+              {["#", "Placa", "Trámites", "Clasificación", "Acción"].map(h => (
+                <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-600">
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {paginatedItems.map((item, i) => (
-              <tr
-                key={item.id}
-                className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors"
-              >
-                <td className="py-3 px-3 text-[#94a3b8] text-xs">{(page - 1) * itemsPerPage + i + 1}</td>
-                <td className="py-3 px-3">
-                  <span className="font-mono font-bold text-[#1e293b] text-sm">{item.placa}</span>
+            {visibles.map((item, i) => (
+              <tr key={item.id}
+                className="border-b border-slate-100 hover:bg-sky-50/40">
+                <td className="px-3 py-3 text-xs text-slate-400">
+                  {(pagina - 1) * POR_PAGINA + i + 1}
                 </td>
-                <td className="py-3 px-3">
+                <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                  {item.placa}
+                </td>
+                <td className="px-3 py-3">
                   <div className="flex flex-wrap gap-1.5">
-                    {item.tramites.map((t, ti) => (
-                      <span
-                        key={ti}
-                        className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full"
-                      >
+                    {item.tramites.map((t, j) => (
+                      <span key={j}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
                         {labelTramite(t.tramite)}
-                        <button
-                          onClick={() => onEliminarTramite(item.id, ti)}
-                          className="hover:text-red-500 transition-colors font-bold ml-0.5"
-                        >
-                          ×
+                        <button type="button" disabled={disabled}
+                          title="Eliminar trámite"
+                          aria-label={`Eliminar ${labelTramite(t.tramite)}`}
+                          onClick={() => eliminarTramite(item.id, j)}
+                          className="ml-1 rounded p-0.5 hover:bg-red-50 hover:text-red-600">
+                          <X size={12} />
                         </button>
                       </span>
                     ))}
                   </div>
                 </td>
-                <td className="py-3 px-3">
-                  <span className="text-xs text-[#64748b]">
-                    {item.tramites[0]?.clasificacion || "—"}
-                  </span>
+                <td className="px-3 py-3 text-xs text-slate-600">
+                  {item.tramites[0]?.clasificacion || "—"}
                 </td>
-                <td className="py-3 px-3 text-center">
-                  <button
-                    onClick={() => onEliminarItem(item.id)}
-                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                <td className="px-3 py-3">
+                  <button type="button" disabled={disabled}
                     title="Eliminar placa"
-                  >
+                    onClick={() => eliminar(item.id)}
+                    className="rounded-lg p-2 text-red-500 hover:bg-red-50">
                     <Trash2 size={15} />
                   </button>
                 </td>
@@ -283,232 +318,236 @@ function CartTable({ items, totalTramites, onEliminarItem, onEliminarTramite, on
         </table>
       </div>
 
-      <Pagination currentPage={page} totalItems={items.length} onPageChange={setPage} />
-    </div>
+      <Paginacion pagina={pagina} total={items.length} cambiar={setPagina} />
+    </section>
   );
 }
 
-function EmptyCart() {
+// ======================================================
+// CARRITO VACÍO
+// ======================================================
+
+function CarritoVacio() {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 md:p-12 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-        <ShoppingCart className="w-8 h-8 text-slate-300" />
+    <section className={`${CARD} p-10 text-center md:p-12`}>
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+        <ShoppingCart size={30} className="text-slate-300" />
       </div>
-      <h3 className="text-base font-bold text-[#1e293b] mb-1">Carrito vacío</h3>
-      <p className="text-sm text-[#64748b] max-w-sm mx-auto leading-relaxed">
+      <h3 className="text-base font-bold text-slate-900">
+        Carrito vacío
+      </h3>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
         Agregue placas con sus trámites para generar liquidaciones RUNT en lote.
         Máximo 40 placas por generación.
       </p>
-    </div>
+    </section>
   );
 }
 
-function BatchSummary({
-  totalPlacas,
-  totalTramites,
-  loading,
-  progreso,
-  onGenerar,
-  puedeEnviar,
-  attemptedSubmit,
-  errores
+// ======================================================
+// RESUMEN DE LOTE
+// ======================================================
+
+function ResumenLote({
+  placas, tramites, loading, progreso,
+  generar, puedeEnviar, errores, attempted
 }) {
-  const porcentaje = Math.min((totalPlacas / MAX_CARRITO) * 100, 100);
-  const estado = loading ? "Procesando" : totalPlacas === 0 ? "Sin datos" : "Listo para generar";
+  const porcentaje = Math.min(placas / MAX_CARRITO * 100, 100);
+  const estado = loading
+    ? "Procesando"
+    : placas === 0 ? "Sin datos" : "Listo para generar";
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <h3 className="text-sm font-semibold text-[#1e293b] mb-4 flex items-center gap-2">
-        <Package className="w-4 h-4 text-[#00ABE4]" />
+    <section className={`${CARD} p-4 md:p-5`}>
+      <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900">
+        <Package size={17} className="text-[#00ABE4]" />
         Resumen del lote
       </h3>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[#64748b]">Total placas</span>
-          <span className="font-semibold text-[#1e293b]">{totalPlacas}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[#64748b]">Total trámites</span>
-          <span className="font-semibold text-[#1e293b]">{totalTramites}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[#64748b]">Máximo permitido</span>
-          <span className="font-medium text-[#64748b]">{MAX_CARRITO} placas</span>
-        </div>
-
-        <div className="pt-1">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-[#94a3b8]">Uso del lote</span>
-            <span className="text-[#64748b] font-medium">{totalPlacas}/{MAX_CARRITO}</span>
+        {[
+          ["Total placas", placas],
+          ["Total trámites", tramites],
+          ["Máximo permitido", `${MAX_CARRITO} placas`]
+        ].map(([label, valor]) => (
+          <div key={label} className="flex items-center justify-between text-sm">
+            <span className="text-slate-500">{label}</span>
+            <strong className="text-slate-800">{valor}</strong>
           </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-[#00ABE4] to-[#0095C5]"
-              style={{ width: `${porcentaje}%` }}
-            />
+        ))}
+
+        <div className="pt-2">
+          <div className="mb-2 flex justify-between text-xs">
+            <span className="text-slate-500">Uso del lote</span>
+            <span className="font-semibold text-slate-700">
+              {placas}/{MAX_CARRITO}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-gradient-to-r from-[#00ABE4] to-[#0095C5] transition-all"
+              style={{ width: `${porcentaje}%` }} />
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs pt-1">
-          <span className="text-[#64748b]">Estado</span>
-          <span className={`font-medium ${loading ? "text-amber-600" : totalPlacas === 0 ? "text-[#94a3b8]" : "text-emerald-600"}`}>
+        <div className="flex justify-between border-t border-slate-100 pt-3 text-xs">
+          <span className="text-slate-500">Estado</span>
+          <span className={`font-semibold ${
+            loading ? "text-amber-600" :
+            placas ? "text-emerald-600" : "text-slate-400"
+          }`}>
             {estado}
           </span>
         </div>
-      </div>
 
-      {loading && (
-        <div className="mt-4 pt-4 border-t border-slate-100">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="text-[#64748b] font-medium">Procesando</span>
-            <span className="text-[#00ABE4] font-semibold">{progreso.actual} / {progreso.total}</span>
-          </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-[#00ABE4] transition-all duration-300"
-              style={{ width: `${progreso.total > 0 ? (progreso.actual / progreso.total) * 100 : 0}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {attemptedSubmit && errores.length > 0 && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl">
-          <div className="flex items-start gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-red-600 space-y-0.5">
-              {errores.map((e, i) => (
-                <p key={i}>{e}</p>
-              ))}
+        {loading && progreso.total > 0 && (
+          <div>
+            <div className="mb-2 flex justify-between text-xs text-slate-600">
+              <span>Procesando</span>
+              <strong>{progreso.actual}/{progreso.total}</strong>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full bg-[#00ABE4] transition-all"
+                style={{
+                  width: `${Math.min(100, progreso.actual / progreso.total * 100)}%`
+                }} />
             </div>
           </div>
+        )}
+      </div>
+
+      {attempted && errores.length > 0 && (
+        <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3">
+          {errores.map((e, i) => (
+            <p key={i} className="flex gap-2 text-xs text-red-700">
+              <AlertCircle size={14} className="shrink-0" /> {e}
+            </p>
+          ))}
         </div>
       )}
 
-      <button
-        onClick={onGenerar}
-        disabled={!puedeEnviar || totalPlacas === 0}
-        className="mt-5 w-full bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-semibold active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:hover:scale-100"
-      >
+      <button type="button" disabled={!puedeEnviar}
+        onClick={generar}
+        className={`${PRIMARY} mt-5 min-h-[46px] w-full`}>
         {loading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Procesando...
-          </>
+          <><Loader2 size={17} className="animate-spin" /> Procesando...</>
         ) : (
-          <>
-            <FileText className="w-4 h-4" />
-            Generar Todo
-          </>
+          <><ClipboardCheck size={17} /> Generar todo</>
         )}
       </button>
 
-      {totalPlacas > 0 && !loading && (
-        <p className="text-xs text-[#94a3b8] text-center mt-2.5">
-          Se generarán todas las liquidaciones agregadas al carrito.
+      {placas > 0 && !loading && (
+        <p className="mt-2 text-center text-xs text-slate-400">
+          Se procesarán las liquidaciones incluidas en el carrito.
         </p>
       )}
-    </div>
+    </section>
   );
 }
 
-function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
-  if (resultados.length === 0) return null;
+// ======================================================
+// RESULTADOS
+// ======================================================
 
-  const [page, setPage] = useState(1);
-  const itemsPerPage = 15;
-  const totalPages = Math.ceil(resultados.length / itemsPerPage);
-  useEffect(() => { if (page > totalPages) setPage(1); }, [resultados.length]);
-  const paginatedItems = resultados.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+function TablaResultados({ resultados, abrirPDF, imprimirTodos }) {
+  const [pagina, setPagina] = useState(1);
+  const totalPaginas = Math.max(1, Math.ceil(resultados.length / POR_PAGINA));
+
+  useEffect(() => {
+    setPagina(p => Math.min(p, totalPaginas));
+  }, [totalPaginas]);
+
+  if (!resultados.length) return null;
+
+  const visibles = resultados.slice(
+    (pagina - 1) * POR_PAGINA,
+    pagina * POR_PAGINA
+  );
 
   const exitosas = resultados.filter(r => r.ok).length;
-  const fallidas = resultados.filter(r => !r.ok).length;
-  const todasExitosas = fallidas === 0;
-
-  const resumenTramites = (tramites) => {
-    return tramites.map(t => labelTramite(t.tramite)).join(", ");
-  };
+  const fallidas = resultados.length - exitosas;
+  const imprimibles = resultados.filter(
+    r => r.ok && r.data?.descarga?.fileName
+  ).length;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-[#1e293b]">Resultados</h3>
-          <div className="flex items-center gap-4 text-xs">
-            <span className="flex items-center gap-1 text-emerald-600 font-medium">
-              <CircleCheck size={14} />
-              {exitosas} exitosa{exitosas !== 1 ? "s" : ""}
+    <section className={`${CARD} p-4 md:p-5`}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-slate-900">
+            Resultados de liquidaciones
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-3 text-xs">
+            <span className="flex items-center gap-1 font-semibold text-emerald-600">
+              <CheckCircle2 size={14} /> {exitosas} exitosas
             </span>
-            <span className="flex items-center gap-1 text-red-500 font-medium">
-              <AlertCircle size={14} />
-              {fallidas} fallida{fallidas !== 1 ? "s" : ""}
+            <span className="flex items-center gap-1 font-semibold text-red-600">
+              <AlertCircle size={14} /> {fallidas} fallidas
             </span>
           </div>
         </div>
 
-        {exitosas > 0 && (
-          <button
-            onClick={onImprimirTodos}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00ABE4]/10 hover:bg-[#00ABE4]/20 text-[#00ABE4] rounded-lg text-xs font-semibold transition-all duration-200"
-            title="Imprimir todos los PDFs"
-          >
-            <Printer size={14} />
-            <span>Imprimir todos</span>
+        {imprimibles > 0 && (
+          <button type="button" onClick={imprimirTodos}
+            className={`${BTN} bg-sky-50 text-[#0095C5] hover:bg-sky-100`}>
+            <Printer size={15} />
+            Imprimir todos
           </button>
         )}
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100">
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">#</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Placa</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Trámites</th>
-              <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#94a3b8]">Estado</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Detalle</th>
-              <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#94a3b8]">PDF</th>
+        <table className="w-full min-w-[650px] text-sm">
+          <thead className="bg-[#E9F1FA]">
+            <tr>
+              {["#", "Placa", "Trámites", "Estado", "Detalle", "PDF"].map(h => (
+                <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-600">
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {paginatedItems.map((r, i) => (
-              <tr
-                key={i}
-                className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors"
-              >
-                <td className="py-3 px-3 text-[#94a3b8] text-xs">{(page - 1) * itemsPerPage + i + 1}</td>
-                <td className="py-3 px-3">
-                  <span className="font-mono font-bold text-[#1e293b] text-sm">{r.placa}</span>
+            {visibles.map((r, i) => (
+              <tr key={`${r.placa}-${i}`}
+                className="border-b border-slate-100 hover:bg-sky-50/40">
+                <td className="px-3 py-3 text-xs text-slate-400">
+                  {(pagina - 1) * POR_PAGINA + i + 1}
                 </td>
-                <td className="py-3 px-3 text-xs text-[#64748b]">{resumenTramites(r.tramites)}</td>
-                <td className="py-3 px-3 text-center">
-                  {r.ok ? (
-                    <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium">
-                      <CheckCircle2 size={11} />
-                      Éxito
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 text-xs px-2.5 py-1 rounded-full font-medium">
-                      <AlertCircle size={11} />
-                      Error
-                    </span>
-                  )}
+                <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                  {r.placa}
                 </td>
-                <td className="py-3 px-3 text-xs text-[#64748b] max-w-[180px] truncate">
-                  {r.ok ? "Liquidación generada correctamente" : (r.error || "Error desconocido")}
+                <td className="px-3 py-3 text-xs text-slate-600">
+                  {(r.tramites || [])
+                    .map(t => labelTramite(t.tramite))
+                    .join(", ")}
                 </td>
-                <td className="py-3 px-3 text-center">
+                <td className="px-3 py-3">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${
+                    r.ok
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-red-50 text-red-700"
+                  }`}>
+                    {r.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                    {r.ok ? "Éxito" : "Error"}
+                  </span>
+                </td>
+                <td className="max-w-[230px] px-3 py-3 text-xs text-slate-600">
+                  <span className="block truncate"
+                    title={r.ok ? "Liquidación generada" : r.error || ""}>
+                    {r.ok
+                      ? "Liquidación generada correctamente"
+                      : r.error || "Error desconocido"}
+                  </span>
+                </td>
+                <td className="px-3 py-3">
                   {r.ok && r.data?.descarga?.fileName ? (
-                    <button
-                      onClick={() => onAbrirPDF(r.data.descarga.fileName)}
-                      className="p-1.5 text-[#00ABE4] hover:bg-blue-50 rounded-lg transition-all"
-                      title="Abrir PDF"
-                    >
-                      <Download size={15} />
+                    <button type="button" title="Abrir PDF"
+                      onClick={() => abrirPDF(r.data.descarga.fileName)}
+                      className="rounded-lg p-2 text-[#0095C5] hover:bg-sky-50">
+                      <Download size={16} />
                     </button>
                   ) : (
-                    <span className="text-[#cbd5e1]">—</span>
+                    <span className="text-slate-300">—</span>
                   )}
                 </td>
               </tr>
@@ -517,30 +556,113 @@ function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
         </table>
       </div>
 
-      <Pagination currentPage={page} totalItems={resultados.length} onPageChange={setPage} />
+      <Paginacion
+        pagina={pagina}
+        total={resultados.length}
+        cambiar={setPagina}
+      />
 
-      <div className="mt-4 p-3.5 bg-blue-50 border border-blue-100 rounded-xl">
-        <p className="text-xs text-blue-700 leading-relaxed">
-          {todasExitosas ? (
-            <>
-              <CheckCircle2 size={14} className="inline mr-1 text-emerald-500" />
-              Todas las liquidaciones se generaron correctamente. Los PDFs se abrieron en nuevas pestañas.
-            </>
-          ) : (
-            <>
-              <AlertTriangle size={14} className="inline mr-1 text-amber-500" />
-              {fallidas} placa(s) fallaron. Revise los errores e intente de nuevo.
-            </>
-          )}
+      <div className={`mt-4 flex items-start gap-2 rounded-xl border p-3 ${
+        fallidas
+          ? "border-amber-200 bg-amber-50"
+          : "border-emerald-200 bg-emerald-50"
+      }`}>
+        {fallidas
+          ? <AlertTriangle size={16} className="shrink-0 text-amber-600" />
+          : <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />}
+        <p className={`text-xs ${
+          fallidas ? "text-amber-800" : "text-emerald-800"
+        }`}>
+          {fallidas
+            ? `${fallidas} placa(s) presentaron errores. Revise los detalles antes de intentar nuevamente.`
+            : `Se generaron ${exitosas} liquidaciones correctamente. Puede abrir o imprimir los PDF disponibles.`}
         </p>
       </div>
-    </div>
+    </section>
   );
 }
 
-// ─────────────────────────────────────────────
+// ======================================================
+// CONFIRMACIÓN DE GENERAR TODO
+// ======================================================
+
+async function confirmarLote(carrito, totalTramites) {
+  const resumen = carrito.map(item => {
+    const tramites = (item.tramites || [])
+      .map(t => `${labelTramite(t.tramite)} (${t.clasificacion})`)
+      .join(", ");
+
+    return `
+      <div style="display:flex;justify-content:space-between;gap:12px;
+        padding:10px 12px;border-bottom:1px solid #e2e8f0;text-align:left">
+        <strong style="font-size:12px;color:#0f172a;white-space:nowrap">
+          ${escapeHtml(item.placa)}
+        </strong>
+        <span style="font-size:12px;color:#64748b;text-align:right">
+          ${escapeHtml(tramites)}
+        </span>
+      </div>`;
+  }).join("");
+
+  const resultado = await Swal.fire({
+    title: "Confirmar liquidaciones",
+    icon: "info",
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif">
+        <p style="font-size:13px;color:#64748b;margin-bottom:16px">
+          Verifique las placas, los trámites y sus clasificaciones
+          antes de generar el lote.
+        </p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;
+          gap:10px;margin-bottom:16px">
+          <div style="background:#E9F1FA;padding:14px;border-radius:12px">
+            <div style="font-size:12px;color:#64748b">Placas</div>
+            <strong style="font-size:24px;color:#0095C5">
+              ${carrito.length}
+            </strong>
+          </div>
+          <div style="background:#E9F1FA;padding:14px;border-radius:12px">
+            <div style="font-size:12px;color:#64748b">Trámites</div>
+            <strong style="font-size:24px;color:#0095C5">
+              ${totalTramites}
+            </strong>
+          </div>
+        </div>
+
+        <div style="max-height:240px;overflow:auto;border:1px solid #e2e8f0;
+          border-radius:12px">
+          ${resumen}
+        </div>
+
+        <div style="margin-top:14px;padding:12px;background:#fffbeb;
+          border:1px solid #fde68a;border-radius:10px;text-align:left;
+          font-size:12px;color:#92400e">
+          Compruebe que cada trámite y clasificación correspondan al vehículo.
+          Para MEDIDAS CAUTELARES puede requerirse confirmación manual en RUNT.
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Confirmar y generar",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#0095C5",
+    cancelButtonColor: "#64748b",
+    reverseButtons: true,
+    width: 580,
+    customClass: {
+      popup: "rounded-2xl",
+      confirmButton: "rounded-xl",
+      cancelButton: "rounded-xl"
+    }
+  });
+
+  return resultado.isConfirmed;
+}
+
+// ======================================================
 // COMPONENTE PRINCIPAL
-// ─────────────────────────────────────────────
+// ======================================================
 
 export default function LiquidarRunt() {
   const [placaInput, setPlacaInput] = useState("");
@@ -555,221 +677,291 @@ export default function LiquidarRunt() {
   const [jobActual, setJobActual] = useState(null);
   const [alarmaActiva, setAlarmaActiva] = useState(false);
 
-  const audioRef = useRef(new Audio(sonidoLiquidacion));
-  audioRef.current.loop = true;
+  const audioRef = useRef(null);
+  const finalizadoRef = useRef(null);
+  const enviandoRef = useRef(false);
 
-  const totalTramites = carrito.reduce((sum, item) => sum + item.tramites.length, 0);
+  const totalTramites = carrito.reduce(
+    (sum, item) => sum + item.tramites.length, 0
+  );
 
-  const iniciarAlarma = () => {
-    setAlarmaActiva(true);
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().catch(err => {
-      console.warn("No se pudo reproducir la alarma:", err);
-    });
-  };
+  const ocupado = loading || Boolean(jobActual);
 
-  const detenerAlarma = () => {
-    setAlarmaActiva(false);
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-  };
+  // --------------------------------------------------
+  // AUDIO
+  // --------------------------------------------------
 
   useEffect(() => {
-    const hayResultados = resultados.length > 0;
-    const terminado = !loading && !jobActual && hayResultados;
+    const audio = new Audio(sonidoLiquidacion);
+    audio.loop = true;
+    audioRef.current = audio;
 
-    if (terminado) {
-      iniciarAlarma();
-    } else {
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+      audioRef.current = null;
+    };
+  }, []);
+
+  const detenerAlarma = useCallback(() => {
+    setAlarmaActiva(false);
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, []);
+
+  const iniciarAlarma = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setAlarmaActiva(true);
+    audio.currentTime = 0;
+    audio.play().catch(() => {
+      // El navegador puede bloquear reproducción automática.
+      setAlarmaActiva(false);
+    });
+  }, []);
+
+  // --------------------------------------------------
+  // AGREGAR PLACAS Y TRÁMITES
+  // --------------------------------------------------
+
+  const handleAgregar = () => {
+    if (ocupado) return;
+
+    const placa = placaInput.trim().toUpperCase();
+
+    if (!placa) return toast.error("Ingrese una placa");
+    if (!tramiteActual) return toast.error("Seleccione un trámite");
+    if (!clasificacionActual) return toast.error("Seleccione una clasificación");
+
+    const existente = carrito.find(item => item.placa === placa);
+
+    // Permite añadir trámites incluso cuando hay 40 placas.
+    if (existente) {
+      const clasificacionExistente =
+        existente.tramites[0]?.clasificacion;
+
+      if (clasificacionExistente !== clasificacionActual) {
+        return toast.error(
+          "Todos los trámites de una placa deben compartir la clasificación"
+        );
+      }
+
+      if (existente.tramites.some(t => t.tramite === tramiteActual)) {
+        return toast.error("Este trámite ya está agregado a la placa");
+      }
+
+      setCarrito(prev => prev.map(item =>
+        item.id === existente.id
+          ? {
+              ...item,
+              tramites: [
+                ...item.tramites,
+                { tramite: tramiteActual, clasificacion: clasificacionActual }
+              ]
+            }
+          : item
+      ));
+
+      setUltimaPlaca(placa);
+      setTramiteActual("");
+      setResultados([]);
       detenerAlarma();
-    }
-  }, [loading, jobActual, resultados.length]);
 
-  const handleAgregarAlCarrito = () => {
-    if (!placaInput.trim()) {
-      toast.error("Ingrese una placa");
+      toast.success(`${labelTramite(tramiteActual)} agregado a ${placa}`);
       return;
     }
-    if (!tramiteActual.trim()) {
-      toast.error("Seleccione un trámite");
-      return;
-    }
-    if (!clasificacionActual.trim()) {
-      toast.error("Seleccione una clasificación");
-      return;
-    }
-
-    const placaUpper = placaInput.trim().toUpperCase();
 
     if (carrito.length >= MAX_CARRITO) {
-      toast.error(`Máximo ${MAX_CARRITO} placas en el carrito`);
-      return;
+      return toast.error(`Máximo ${MAX_CARRITO} placas por lote`);
     }
 
-    if (placaUpper === ultimaPlaca && carrito.length > 0) {
-      const ultimoItem = carrito[carrito.length - 1];
-
-      if (ultimoItem.tramites.length > 0 && ultimoItem.tramites[0].clasificacion !== clasificacionActual) {
-        toast.error("Todos los trámites de una placa deben compartir la misma clasificación (flujo RUNT)");
-        return;
+    setCarrito(prev => [
+      ...prev,
+      {
+        id: uuidv4(),
+        placa,
+        tramites: [{
+          tramite: tramiteActual,
+          clasificacion: clasificacionActual
+        }]
       }
+    ]);
 
-      const yaExiste = ultimoItem.tramites.some(t => t.tramite === tramiteActual);
-      if (yaExiste) {
-        toast.error("Ese trámite ya está agregado para esta placa");
-        return;
-      }
-
-      setCarrito(prev => {
-        const nuevo = [...prev];
-        nuevo[nuevo.length - 1] = {
-          ...ultimoItem,
-          tramites: [...ultimoItem.tramites, { tramite: tramiteActual, clasificacion: clasificacionActual }]
-        };
-        return nuevo;
-      });
-
-      toast.success(`${labelTramite(tramiteActual)} agregado a ${placaUpper}`);
-      setTramiteActual("");
-      return;
-    }
-
-    const existe = carrito.some(item => item.placa === placaUpper);
-    if (existe) {
-      toast.error(`La placa ${placaUpper} ya está en el carrito. Para agregar más trámites, seleccione la misma placa sin cambiar.`);
-      return;
-    }
-
-    setCarrito(prev => [...prev, {
-      id: uuidv4(),
-      placa: placaUpper,
-      tramites: [{ tramite: tramiteActual, clasificacion: clasificacionActual }]
-    }]);
-    setUltimaPlaca(placaUpper);
+    setUltimaPlaca(placa);
     setTramiteActual("");
-    toast.success(`${placaUpper} → ${labelTramite(tramiteActual)} agregado al carrito`);
+    setResultados([]);
+    detenerAlarma();
+    toast.success(`${placa} agregado al carrito`);
   };
 
-  const handleEliminarItem = (id) => {
+  const handleEliminarItem = id => {
+    if (ocupado) return;
     setCarrito(prev => prev.filter(item => item.id !== id));
-    if (ultimaPlaca === carrito.find(i => i.id === id)?.placa) {
+    setResultados([]);
+    detenerAlarma();
+
+    if (carrito.find(item => item.id === id)?.placa === ultimaPlaca) {
       setUltimaPlaca("");
     }
   };
 
-  const handleLimpiarFormulario = () => {
+  const handleEliminarTramite = (id, index) => {
+    if (ocupado) return;
+
+    setCarrito(prev => prev
+      .map(item => {
+        if (item.id !== id) return item;
+        const tramites = item.tramites.filter((_, i) => i !== index);
+        return tramites.length ? { ...item, tramites } : null;
+      })
+      .filter(Boolean)
+    );
+
+    setResultados([]);
+    detenerAlarma();
+  };
+
+  const limpiarFormulario = () => {
+    if (ocupado) return;
     setPlacaInput("");
     setTramiteActual("");
     setClasificacionActual("");
     setUltimaPlaca("");
-    detenerAlarma();
   };
 
-  const handleLimpiarCarrito = () => {
+  const limpiarCarrito = () => {
+    if (ocupado) return;
     setCarrito([]);
     setResultados([]);
     setAttemptedSubmit(false);
-    handleLimpiarFormulario();
+    limpiarFormulario();
+    detenerAlarma();
   };
 
-  const handleEliminarTramiteItem = (itemId, tramiteIndex) => {
-    setCarrito(prev => prev.map(item => {
-      if (item.id !== itemId) return item;
-      const nuevosTramites = item.tramites.filter((_, i) => i !== tramiteIndex);
-      if (nuevosTramites.length === 0) return null;
-      return { ...item, tramites: nuevosTramites };
-    }).filter(Boolean));
-  };
-
-  const obtenerErrores = () => {
-    const errores = [];
-    if (carrito.length === 0) errores.push("Agregue al menos una placa al carrito");
-    for (const item of carrito) {
-      if (item.tramites.length === 0) errores.push(`La placa ${item.placa} no tiene trámites`);
+  const errores = [];
+  if (carrito.length === 0) {
+    errores.push("Agregue al menos una placa al carrito");
+  }
+  carrito.forEach(item => {
+    if (!item.tramites.length) {
+      errores.push(`La placa ${item.placa} no tiene trámites`);
     }
-    return errores;
-  };
+  });
 
-  const errores = obtenerErrores();
-  const puedeEnviar = errores.length === 0 && !loading;
+  const puedeEnviar = !ocupado && errores.length === 0;
 
-  const abrirPDF = (fileName) => {
-    const url = `${API_BASE}/descargar/${fileName}`;
-    window.open(url, "_blank");
+  // --------------------------------------------------
+  // IMPRESIÓN
+  // --------------------------------------------------
+
+  const abrirPDF = fileName => {
+    if (!fileName) return;
+    const url = `${API_BASE}/descargar/${encodeURIComponent(fileName)}`;
+    const ventana = window.open(url, "_blank", "noopener,noreferrer");
+
+    if (!ventana) {
+      toast.error("El navegador puede haber bloqueado la apertura del PDF");
+    }
   };
 
   const handleImprimirTodos = () => {
-    const exitosos = resultados.filter(r => r.ok && r.data?.descarga?.fileName);
-    if (exitosos.length === 0) {
-      toast.error("No hay liquidaciones exitosas para imprimir");
-      return;
+    const exitosos = resultados.filter(
+      r => r.ok && r.data?.descarga?.fileName
+    );
+
+    if (!exitosos.length) {
+      return toast.error("No hay liquidaciones exitosas para imprimir");
     }
 
     detenerAlarma();
 
-    const fileNames = exitosos.map(r => r.data.descarga.fileName);
-    const filesParam = encodeURIComponent(fileNames.join(','));
-    const url = `http://localhost:3000/api/liquidacion/imprimir-pdfs?files=${filesParam}`;
+    const nombres = exitosos.map(r => r.data.descarga.fileName);
+    const files = encodeURIComponent(nombres.join(","));
 
-    // Abrir en nueva pestaña para evitar CORS/PNA del navegador
-    window.open(url, "_blank");
-    toast.info("Se abrió la ventana de impresión local");
+    // Se conserva el servicio local de impresión utilizado actualmente.
+    const url =
+      `http://localhost:3000/api/liquidacion/imprimir-pdfs?files=${files}`;
+
+    const ventana = window.open(url, "_blank");
+
+    if (ventana) {
+      toast("Se solicitó la apertura de la ventana de impresión");
+    } else {
+      toast.error("El navegador bloqueó la ventana de impresión");
+    }
   };
 
+  // --------------------------------------------------
+  // GENERAR TODO
+  // --------------------------------------------------
+
   const handleGenerarTodo = async () => {
+    if (enviandoRef.current || ocupado) return;
+
     setAttemptedSubmit(true);
+
     if (!puedeEnviar) {
       errores.forEach(e => toast.error(e));
       return;
     }
 
-    const { isConfirmed } = await Swal.fire({
-      title: "¿Confirmar envío?",
-      html: `Revise que sea el tramite y tipo vehiculo correcto.`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Sí, enviar",
-      cancelButtonText: "Cancelar",
-      confirmButtonColor: "#d33",
-    });
-    if (!isConfirmed) return;
+    const confirmado = await confirmarLote(carrito, totalTramites);
+    if (!confirmado || enviandoRef.current) return;
+
+    enviandoRef.current = true;
 
     try {
       setLoading(true);
       setResultados([]);
+      detenerAlarma();
+      finalizadoRef.current = null;
       setProgreso({ actual: 0, total: carrito.length });
 
       const items = carrito.map(item => ({
         placa: item.placa,
         tramites: item.tramites,
-        fechaLiquidacion: new Date().toISOString().split("T")[0]
+        fechaLiquidacion: fechaHoy()
       }));
 
       const resp = await crearJob("liquidaciones", items);
 
-      if (resp.job?.id_job) {
-        setJobActual(resp.job.id_job);
-        toast.success(`Trabajo creado con ${items.length} liquidación(es)`);
-      } else if (resp.jobs?.length > 0) {
-        setJobActual(resp.jobs[0].id_job);
-        toast.success(`Trabajo creado con ${items.length} liquidación(es)`);
-      } else {
-        throw new Error("No se recibió ID del trabajo");
-      }
+      const id = resp.job?.id_job || resp.jobs?.[0]?.id_job;
+
+      if (!id) throw new Error("No se recibió el ID del trabajo");
+
+      setJobActual(id);
+      toast.success(`Trabajo creado para ${items.length} placas`);
     } catch (err) {
-      const mensaje = err.response?.data?.error || err.message || "Error de conexión";
-      toast.error(mensaje);
+      toast.error(
+        err.response?.data?.error ||
+        err.message ||
+        "Error creando el lote de liquidaciones"
+      );
     } finally {
       setLoading(false);
+      enviandoRef.current = false;
     }
   };
 
-  const procesarJobCompletado = async (jobId) => {
+  // --------------------------------------------------
+  // RESULTADOS DEL WORKER
+  // --------------------------------------------------
+
+  const procesarJobCompletado = async jobId => {
+    if (finalizadoRef.current === jobId) return;
+    finalizadoRef.current = jobId;
+
     try {
+      setLoading(true);
+
       const detalle = await obtenerDetalleJob(jobId);
       const items = detalle.items || [];
 
-      const resultadosArr = items.map((item, index) => ({
+      const nuevosResultados = items.map((item, index) => ({
         index,
         placa: item.payload?.placa || "—",
         ok: item.estado === "exitoso",
@@ -778,127 +970,124 @@ export default function LiquidarRunt() {
         tramites: item.payload?.tramites || []
       }));
 
-      setResultados(resultadosArr);
+      setResultados(nuevosResultados);
       setProgreso({ actual: items.length, total: items.length });
-
-      const exitosos = resultadosArr.filter(r => r.ok);
-      const fallidos = resultadosArr.filter(r => !r.ok);
-
-      if (fallidos.length === 0) {
-        toast.success(`${exitosos.length} liquidación(es) generada(s) exitosamente`);
-      } else {
-        toast.success(`${exitosos.length} exitosas, ${fallidos.length} fallidas`);
-      }
-    } catch (err) {
-      toast.error("Error cargando resultados del trabajo");
-      console.error(err);
-    } finally {
       setJobActual(null);
+
+      const exitosas = nuevosResultados.filter(r => r.ok).length;
+      const fallidas = nuevosResultados.length - exitosas;
+
+      if (fallidas) {
+        toast(`${exitosas} exitosas y ${fallidas} fallidas`);
+      } else {
+        toast.success(`${exitosas} liquidaciones generadas correctamente`);
+      }
+
+      if (nuevosResultados.length) iniciarAlarma();
+    } catch (err) {
+      finalizadoRef.current = null;
+      console.error("Error cargando resultados:", err);
+      toast.error("No fue posible cargar los resultados del trabajo");
+    } finally {
       setLoading(false);
-      setProgreso({ actual: 0, total: 0 });
     }
   };
 
-  const tieneItems = carrito.length > 0;
-  const TARIFA_ALERT = (
-    "Tarifa automática: Se selecciona según trámite + clasificación. "
-    + "Para MEDIDAS CAUTELARES se mostrará un popup en el RUNT que debe aceptar manualmente. "
-    + `Máximo ${MAX_CARRITO} placas por lote.`
-  );
+  const cerrarJob = () => {
+    // El trabajo no se cancela en el servidor; únicamente se cierra la vista.
+    setJobActual(null);
+  };
+
+  // --------------------------------------------------
+  // INTERFAZ
+  // --------------------------------------------------
 
   return (
     <div className="min-h-screen bg-[#E9F1FA]">
       <Header />
 
-      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4 md:space-y-5">
-
-        <PageHeader totalPlacas={carrito.length} totalTramites={totalTramites} />
-
-        {tieneItems && <AlertBanner message={TARIFA_ALERT} />}
-
-        <AddPlateCard
-          placaInput={placaInput}
-          setPlacaInput={setPlacaInput}
-          tramiteActual={tramiteActual}
-          setTramiteActual={setTramiteActual}
-          clasificacionActual={clasificacionActual}
-          setClasificacionActual={setClasificacionActual}
-          onAgregar={handleAgregarAlCarrito}
-          onBorrarCampos={handleLimpiarFormulario}
-          disabled={carrito.length >= MAX_CARRITO || loading}
+      <div className="mx-auto max-w-6xl space-y-4 px-4 pb-6 pt-2 md:px-6">
+        <PageHeader
+          totalPlacas={carrito.length}
+          totalTramites={totalTramites}
         />
 
-        {tieneItems ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
-            <div className="lg:col-span-2 space-y-4 md:space-y-5">
-              <CartTable
+        <Formulario
+          placa={placaInput}
+          setPlaca={setPlacaInput}
+          tramite={tramiteActual}
+          setTramite={setTramiteActual}
+          clasificacion={clasificacionActual}
+          setClasificacion={setClasificacionActual}
+          agregar={handleAgregar}
+          limpiar={limpiarFormulario}
+          disabled={ocupado}
+        />
+
+        <AvisoTarifas />
+
+        {carrito.length ? (
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+            <div className="space-y-4 lg:col-span-2">
+              <Carrito
                 items={carrito}
                 totalTramites={totalTramites}
-                onEliminarItem={handleEliminarItem}
-                onEliminarTramite={handleEliminarTramiteItem}
-                onLimpiarTodo={handleLimpiarCarrito}
+                eliminar={handleEliminarItem}
+                eliminarTramite={handleEliminarTramite}
+                limpiar={limpiarCarrito}
+                disabled={ocupado}
               />
 
               {jobActual && (
                 <JobProgress
                   jobId={jobActual}
-                  onClose={() => setJobActual(null)}
+                  onClose={cerrarJob}
                   onComplete={() => procesarJobCompletado(jobActual)}
                 />
               )}
 
               {alarmaActiva && (
-                <div className="bg-amber-100 border-2 border-amber-400 rounded-2xl p-4 flex items-center justify-between animate-pulse">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4">
                   <div className="flex items-center gap-3">
-                    <Volume2 className="w-6 h-6 text-amber-600" />
+                    <Volume2 size={22} className="text-amber-600" />
                     <div>
-                      <p className="text-sm font-bold text-amber-800">¡Proceso finalizado!</p>
-                      <p className="text-xs text-amber-700">Las liquidaciones están listas para imprimir.</p>
+                      <p className="text-sm font-bold text-amber-900">
+                        Proceso finalizado
+                      </p>
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        Revise los resultados y los PDF disponibles.
+                      </p>
                     </div>
                   </div>
-                  <button
-                    onClick={detenerAlarma}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-all"
-                  >
-                    <VolumeX size={14} />
+                  <button type="button" onClick={detenerAlarma}
+                    className={`${BTN} bg-amber-600 text-white hover:bg-amber-700`}>
+                    <VolumeX size={15} />
                     Silenciar alarma
                   </button>
                 </div>
               )}
 
-              <ResultsTable
+              <TablaResultados
                 resultados={resultados}
-                onAbrirPDF={abrirPDF}
-                onImprimirTodos={handleImprimirTodos}
+                abrirPDF={abrirPDF}
+                imprimirTodos={handleImprimirTodos}
               />
             </div>
 
-            <div className="space-y-4 md:space-y-5">
-              <BatchSummary
-                totalPlacas={carrito.length}
-                totalTramites={totalTramites}
-                loading={loading}
-                progreso={progreso}
-                onGenerar={handleGenerarTodo}
-                puedeEnviar={puedeEnviar}
-                attemptedSubmit={attemptedSubmit}
-                errores={errores}
-              />
-
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <AlertBanner message={TARIFA_ALERT} />
-              </div>
-            </div>
+            <ResumenLote
+              placas={carrito.length}
+              tramites={totalTramites}
+              loading={ocupado}
+              progreso={progreso}
+              generar={handleGenerarTodo}
+              puedeEnviar={puedeEnviar}
+              errores={errores}
+              attempted={attemptedSubmit}
+            />
           </div>
         ) : (
-          <div className="space-y-4 md:space-y-5">
-            <EmptyCart />
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-              <AlertBanner message={TARIFA_ALERT} />
-            </div>
-          </div>
+          <CarritoVacio />
         )}
-
       </div>
     </div>
   );

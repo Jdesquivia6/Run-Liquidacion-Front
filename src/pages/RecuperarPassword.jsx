@@ -1,319 +1,460 @@
-import { useState } from "react";
+
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  CarFront, Mail, Lock, ShieldCheck, ArrowLeft,
+  ArrowRight, Loader2, CheckCircle2, AlertCircle,
+  KeyRound, Send, Inbox, Clock3, LifeBuoy
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { recuperarPasswordRequest } from "../services/authApi";
 
+const INPUT =
+  "h-[52px] w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-[16px] text-slate-800 outline-none placeholder:text-slate-400 disabled:bg-slate-50";
+
+function BrandPanel() {
+  const reduce = useReducedMotion();
+
+  return (
+    <aside className="relative hidden h-full min-h-0 flex-col overflow-y-auto bg-[#081F3A] px-8 py-5 text-white lg:flex xl:px-12 xl:py-7">
+
+      {/* FONDO CORPORATIVO */}
+
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -right-36 -top-36 h-[480px] w-[480px] rounded-full border border-cyan-400/10" />
+        <div className="absolute -right-20 -top-20 h-[360px] w-[360px] rounded-full border border-cyan-400/10" />
+        <div className="absolute -bottom-40 -left-32 h-[440px] w-[440px] rounded-full bg-[#00ABE4]/10 blur-[90px]" />
+        <div
+          className="absolute inset-0 opacity-[0.045]"
+          style={{
+            backgroundImage:
+              "linear-gradient(white 1px,transparent 1px),linear-gradient(90deg,white 1px,transparent 1px)",
+            backgroundSize: "45px 45px"
+          }}
+        />
+      </div>
+
+      {/* MARCA */}
+
+      <Link
+        to="/"
+        className="relative z-10 flex w-fit shrink-0 items-center gap-3"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#00ABE4] to-[#0095C5] shadow-lg shadow-cyan-500/20">
+          <CarFront size={23} />
+        </span>
+
+        <span>
+          <span className="block text-[22px] font-extrabold tracking-tight">
+            Auto<span className="text-[#43C9F0]">Core</span>
+          </span>
+
+          <span className="block text-[9px] font-semibold tracking-[0.17em] text-slate-400">
+            CENTRO DE OPERACIONES
+          </span>
+        </span>
+      </Link>
+
+      {/* CONTENIDO INSTITUCIONAL */}
+
+      <div className="relative z-10 my-auto w-full max-w-[510px] py-6">
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduce ? 0 : 0.4 }}
+        >
+          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5">
+            <ShieldCheck size={14} className="text-cyan-300" />
+
+            <span className="text-[10px] font-bold tracking-wide text-cyan-200">
+              RECUPERACIÓN DE ACCESO
+            </span>
+          </div>
+
+          <h1 className="mt-5 text-[clamp(30px,3vw,47px)] font-extrabold leading-[1.12] tracking-tight">
+            Recupera tu acceso,
+            <span className="mt-1 block text-[#43C9F0]">
+              continúa tu operación.
+            </span>
+          </h1>
+
+          <p className="mt-4 max-w-[430px] text-[13px] leading-6 text-slate-300 xl:text-sm">
+            Te ayudamos a restablecer el acceso a AutoCore
+            mediante el correo electrónico asociado a tu cuenta.
+          </p>
+
+          {/* PASOS DE RECUPERACIÓN */}
+
+          <div className="mt-7 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.055] backdrop-blur-md">
+            <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+              <KeyRound size={16} className="text-[#43C9F0]" />
+
+              <span className="text-xs font-semibold">
+                Proceso de recuperación
+              </span>
+            </div>
+
+            <div className="divide-y divide-white/10 px-4">
+              {[
+                {
+                  icon: Mail,
+                  title: "Ingresa tu correo",
+                  description: "Utiliza el correo de tu cuenta AutoCore."
+                },
+                {
+                  icon: Inbox,
+                  title: "Revisa tu bandeja",
+                  description: "Busca el mensaje con las instrucciones."
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "Recupera tu acceso",
+                  description: "Utiliza las credenciales recibidas."
+                }
+              ].map(({ icon: Icon, title, description }, i) => (
+                <div key={title} className="flex items-center gap-3 py-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#00ABE4]/10 text-[#43C9F0]">
+                    <Icon size={18} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-slate-100">
+                      {title}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      {description}
+                    </p>
+                  </div>
+
+                  <span className="text-[11px] font-bold text-cyan-300/70">
+                    0{i + 1}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* FOOTER IZQUIERDO */}
+
+      <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
+        <span className="flex items-center gap-2 text-[11px] text-slate-400">
+          <ShieldCheck size={15} className="text-[#43C9F0]" />
+          Acceso para usuarios autorizados
+        </span>
+
+        <span className="text-[11px] text-slate-500">
+          © {new Date().getFullYear()} AutoCore
+        </span>
+      </div>
+    </aside>
+  );
+}
+
+// ======================================================
+// PÁGINA PRINCIPAL
+// ======================================================
+
 export default function RecuperarPassword() {
+  const reduce = useReducedMotion();
+  const enviandoRef = useRef(false);
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [emailEnviado, setEmailEnviado] = useState(false);
+  const [errorForm, setErrorForm] = useState("");
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
+    if (enviandoRef.current) return;
+
+    const correo = email.trim();
+
+    if (!correo) {
+      setErrorForm("Ingresa tu correo electrónico.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      setErrorForm("Ingresa un correo electrónico válido.");
+      return;
+    }
+
+    enviandoRef.current = true;
+    setLoading(true);
+    setErrorForm("");
 
     try {
-      setLoading(true);
+      // Conservamos el contrato original del servicio.
+      const resp = await recuperarPasswordRequest(correo);
 
-      const resp = await recuperarPasswordRequest(email);
+      if (resp?.ok === false) {
+        throw new Error(resp.error || "No se pudo procesar la solicitud.");
+      }
 
-      toast.success(resp.message || "Correo enviado");
-      setEmail("");
       setEmailEnviado(true);
 
-    } catch (error) {
-      toast.error(error.response?.data?.error || "No se pudo recuperar la contraseña");
+      toast.success(
+        "Solicitud de recuperación procesada correctamente."
+      );
+    } catch (err) {
+      const mensaje =
+        err?.response?.data?.error ||
+        err?.message ||
+        "No se pudo procesar la solicitud de recuperación.";
+
+      setErrorForm(mensaje);
+      toast.error(mensaje);
     } finally {
+      enviandoRef.current = false;
       setLoading(false);
     }
   };
 
+  const otraSolicitud = () => {
+    setEmail("");
+    setEmailEnviado(false);
+    setErrorForm("");
+  };
+
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-[#E9F1FA] via-blue-50 to-white">
+    <main className="grid min-h-dvh w-full bg-white lg:h-dvh lg:min-h-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:overflow-hidden">
 
-      {/* Partículas decorativas flotantes */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute w-64 h-64 rounded-full bg-[#00ABE4]/5"
-          style={{ top: '10%', left: '5%' }}
-          animate={{
-            y: [0, -20, 0],
-            opacity: [0.3, 0.5, 0.3]
-          }}
-          transition={{
-            duration: 8,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-48 h-48 rounded-full bg-[#00ABE4]/8"
-          style={{ top: '60%', right: '10%' }}
-          animate={{
-            y: [0, 15, 0],
-            opacity: [0.2, 0.4, 0.2]
-          }}
-          transition={{
-            duration: 6,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-32 h-32 rounded-full bg-[#00ABE4]/6"
-          style={{ bottom: '20%', left: '15%' }}
-          animate={{
-            y: [0, -10, 0],
-            opacity: [0.25, 0.45, 0.25]
-          }}
-          transition={{
-            duration: 7,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-20 h-20 rounded-full bg-[#00ABE4]/10"
-          style={{ top: '30%', right: '25%' }}
-          animate={{
-            y: [0, 12, 0],
-            opacity: [0.35, 0.55, 0.35]
-          }}
-          transition={{
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-40 h-40 rounded-full bg-[#00ABE4]/4"
-          style={{ bottom: '40%', right: '30%' }}
-          animate={{
-            y: [0, -18, 0],
-            opacity: [0.2, 0.35, 0.2]
-          }}
-          transition={{
-            duration: 9,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-3 h-3 rounded-full bg-[#00ABE4]/20"
-          style={{ top: '15%', left: '40%' }}
-          animate={{
-            y: [0, -25, 0],
-            opacity: [0.3, 0.6, 0.3]
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-2 h-2 rounded-full bg-[#00ABE4]/30"
-          style={{ top: '45%', left: '20%' }}
-          animate={{
-            y: [0, 20, 0],
-            opacity: [0.4, 0.7, 0.4]
-          }}
-          transition={{
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-        <motion.div
-          className="absolute w-4 h-4 rounded-full bg-[#00ABE4]/15"
-          style={{ bottom: '30%', right: '15%' }}
-          animate={{
-            y: [0, -15, 0],
-            opacity: [0.25, 0.5, 0.25]
-          }}
-          transition={{
-            duration: 6,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-      </div>
+      <BrandPanel />
 
-      {/* Contenido principal */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6">
+      {/* PANEL DERECHO */}
 
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className="w-full max-w-md bg-white rounded-3xl shadow-[0_8px_32px_rgba(0,171,228,0.15)] p-8 sm:p-10"
-        >
+      <section className="relative flex min-h-dvh min-w-0 flex-col bg-white lg:h-full lg:min-h-0 lg:overflow-y-auto">
+        <div className="pointer-events-none absolute -right-36 -top-36 h-80 w-80 rounded-full bg-sky-100/50 blur-3xl lg:hidden" />
 
-          {emailEnviado ? (
-            /* Estado de éxito */
-            <div className="text-center space-y-6">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-                className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-green-100 to-green-200 border-2 border-green-400/30"
-              >
-                <svg className="w-10 h-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
-              </motion.div>
+        {/* NAVEGACIÓN SUPERIOR */}
 
-              <div>
-                <h2 className="text-2xl font-bold text-[#1e293b] mb-2">Correo enviado</h2>
-                <p className="text-[#64748b] text-sm">
-                  Si el correo existe en nuestros registros, recibirás una contraseña temporal en tu bandeja de entrada.
-                </p>
-              </div>
+        <header className="relative z-10 flex shrink-0 items-center justify-between gap-3 px-5 py-4 sm:px-10 lg:px-10">
+          <Link
+            to="/login"
+            className="flex min-h-11 items-center gap-2 text-xs font-semibold text-slate-500 hover:text-[#0095C5]"
+          >
+            <ArrowLeft size={17} />
+            Volver al login
+          </Link>
 
-              <div className="bg-[#00ABE4]/10 border border-[#00ABE4]/20 rounded-2xl p-4 text-left">
-                <div className="flex items-start gap-2">
-                  <svg className="w-5 h-5 text-[#00ABE4] mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-                  </svg>
-                  <p className="text-[#64748b] text-xs leading-relaxed">
-                    Revisa también la carpeta de spam. La contraseña temporal tiene vigencia de 24 horas.
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-500">
+            <Lock size={13} className="text-[#0095C5]" />
+            Recuperación segura
+          </span>
+        </header>
+
+        {/* CONTENIDO CENTRAL */}
+
+        <div className="relative z-10 flex flex-1 items-center justify-center px-5 py-5 sm:px-10 lg:px-10">
+          <motion.div
+            initial={reduce ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduce ? 0 : 0.4 }}
+            className="w-full max-w-[420px]"
+          >
+
+            {/* FORMULARIO DE RECUPERACIÓN */}
+
+            {!emailEnviado ? (
+              <>
+                <div className="mb-7">
+                  <Link to="/" className="mb-5 flex w-fit items-center gap-3 lg:hidden">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#00ABE4] to-[#0095C5] text-white">
+                      <CarFront size={23} />
+                    </span>
+
+                    <span className="text-2xl font-extrabold text-slate-900">
+                      Auto<span className="text-[#00ABE4]">Core</span>
+                    </span>
+                  </Link>
+
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 text-[#0095C5]">
+                    <KeyRound size={25} />
+                  </div>
+
+                  <h1 className="text-[29px] font-extrabold tracking-tight text-slate-900 sm:text-[32px]">
+                    Recuperar contraseña
+                  </h1>
+
+                  <p className="mt-3 text-[13px] leading-6 text-slate-500">
+                    Ingresa tu correo electrónico registrado.
+                    Te enviaremos las instrucciones para recuperar
+                    el acceso a tu cuenta.
                   </p>
                 </div>
-              </div>
 
-              <button
-                type="button"
-                onClick={() => setEmailEnviado(false)}
-                className="w-full border-2 border-gray-100 text-[#64748b] hover:bg-gray-50 hover:border-[#00ABE4]/30 hover:text-[#00ABE4] rounded-2xl py-3 font-medium transition-all duration-300"
-              >
-                Enviar a otro correo
-              </button>
-
-              {/* Botón para ir al login */}
-              <Link
-                to="/login"
-                className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#00ABE4] to-[#0090c4] hover:from-[#00ABE4] hover:to-[#007ba3] text-white font-semibold rounded-2xl py-3 px-6 transition-all duration-300 shadow-md"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-                <span>Ir al inicio de sesión</span>
-              </Link>
-            </div>
-          ) : (
-            /* Formulario de recuperación */
-            <>
-              {/* Header */}
-              <div className="text-center mb-8">
-                {/* Logo clickeable que redirige al Landing */}
-                <Link to="/" className="inline-block">
-                  <motion.div
-                    className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E9F1FA] to-[#00ABE4]/10 border-2 border-[#00ABE4]/20 mb-6 cursor-pointer"
-                    animate={{
-                      boxShadow: [
-                        "0 0 0 0 rgba(0, 171, 228, 0.2)",
-                        "0 0 0 8px rgba(0, 171, 228, 0)",
-                      ]
-                    }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "easeOut"
-                    }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <motion.svg
-                      className="w-10 h-10 text-[#00ABE4]"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      animate={{ scale: [1, 1.02, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div>
+                    <label
+                      htmlFor="email"
+                      className="mb-2 block text-[13px] font-semibold text-slate-700"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
-                    </motion.svg>
-                  </motion.div>
-                </Link>
+                      Correo electrónico
+                    </label>
 
-                <h1 className="text-3xl sm:text-4xl font-bold text-[#1e293b] mb-2">
-                  Recuperar Contraseña
-                </h1>
-                <p className="text-[#64748b] text-sm">
-                  Ingresa tu correo y te enviaremos una contraseña temporal para acceder al sistema.
-                </p>
-              </div>
+                    <div className="relative">
+                      <Mail
+                        size={19}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
 
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#00ABE4]/60">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5A2.25 2.25 0 002.25 6.75m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                    </svg>
+                      <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        disabled={loading}
+                        onChange={e => {
+                          setEmail(e.target.value);
+                          if (errorForm) setErrorForm("");
+                        }}
+                        required
+                        autoComplete="email"
+                        autoCapitalize="none"
+                        inputMode="email"
+                        spellCheck={false}
+                        placeholder="nombre@empresa.com"
+                        className={INPUT}
+                        aria-invalid={Boolean(errorForm)}
+                        aria-describedby={errorForm ? "recover-error" : undefined}
+                      />
+                    </div>
                   </div>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="Correo electrónico registrado"
-                    className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-[#1e293b] placeholder-[#64748b]/60 focus:outline-none focus:border-[#00ABE4] focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,171,228,0.15)] transition-all duration-300"
-                  />
-                </div>
 
-                <motion.button
-                  type="submit"
-                  disabled={loading}
-                  whileHover={{ scale: loading ? 1 : 1.02 }}
-                  whileTap={{ scale: loading ? 1 : 0.98 }}
-                  className="w-full relative overflow-hidden bg-gradient-to-r from-[#00ABE4] to-[#0090c4] hover:from-[#00ABE4] hover:to-[#007ba3] disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold rounded-2xl py-4 transition-all duration-300 shadow-lg shadow-[#00ABE4]/25 disabled:shadow-none disabled:cursor-not-allowed"
-                >
-                  <span className="relative z-10 flex items-center justify-center gap-2">
+                  {errorForm && (
+                    <div
+                      id="recover-error"
+                      role="alert"
+                      className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700"
+                    >
+                      <AlertCircle size={17} className="shrink-0 text-red-500" />
+                      {errorForm}
+                    </div>
+                  )}
+
+                  <motion.button
+                    type="submit"
+                    disabled={loading}
+                    whileHover={reduce || loading ? undefined : { y: -1 }}
+                    whileTap={reduce || loading ? undefined : { scale: 0.99 }}
+                    className="flex h-[54px] w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#00ABE4] to-[#0095C5] px-4 text-sm font-bold text-white shadow-lg shadow-sky-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
                     {loading ? (
                       <>
-                        <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Enviando...</span>
+                        <Loader2 size={19} className="animate-spin" />
+                        Procesando solicitud...
                       </>
                     ) : (
                       <>
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                        </svg>
-                        <span>Enviar Contraseña Temporal</span>
+                        <Send size={18} />
+                        Enviar solicitud
+                        <ArrowRight size={17} />
                       </>
                     )}
-                  </span>
-                </motion.button>
-              </form>
+                  </motion.button>
+                </form>
 
-              {/* Link volver */}
-              <div className="mt-6 text-center">
-                <Link
-                  to="/login"
-                  className="inline-flex items-center gap-2 text-sm text-[#00ABE4] hover:text-[#0090c4] font-medium transition-colors"
+                <div className="mt-6 flex items-start gap-3 rounded-xl bg-[#F5F9FC] p-4">
+                  <ShieldCheck
+                    size={18}
+                    className="mt-0.5 shrink-0 text-[#0095C5]"
+                  />
+
+                  <p className="text-xs leading-5 text-slate-500">
+                    Por seguridad, la confirmación no indica
+                    si una dirección de correo está registrada.
+                  </p>
+                </div>
+              </>
+            ) : (
+
+              // ==========================================
+              // CONFIRMACIÓN DE SOLICITUD
+              // ==========================================
+
+              <div>
+                <motion.div
+                  initial={reduce ? false : { opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: reduce ? 0 : 0.35 }}
+                  className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 text-emerald-600"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                  </svg>
-                  Volver al inicio de sesión
-                </Link>
+                  <CheckCircle2 size={33} />
+                </motion.div>
+
+                <h1 className="text-[30px] font-extrabold tracking-tight text-slate-900">
+                  Solicitud recibida
+                </h1>
+
+                <p className="mt-3 text-sm leading-6 text-slate-500">
+                  Si el correo electrónico se encuentra registrado,
+                  recibirás un mensaje con las instrucciones
+                  para recuperar tu acceso a AutoCore.
+                </p>
+
+                <div className="mt-6 space-y-3 rounded-2xl border border-slate-200 bg-[#F8FBFD] p-4">
+                  <div className="flex items-start gap-3">
+                    <Inbox size={19} className="mt-0.5 shrink-0 text-[#0095C5]" />
+
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        Revisa tu correo
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        Consulta tu bandeja de entrada y la carpeta
+                        de correo no deseado o spam.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 border-t border-slate-200 pt-3">
+                    <Clock3 size={19} className="mt-0.5 shrink-0 text-[#0095C5]" />
+
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        Utiliza las instrucciones recibidas
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        Si recibes una contraseña temporal, cámbiala
+                        cuando el sistema te lo solicite.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  <Link
+                    to="/login"
+                    className="flex h-[52px] w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#00ABE4] text-sm font-bold text-white transition-colors hover:bg-[#0095C5]"
+                  >
+                    Ir al inicio de sesión
+                    <ArrowRight size={18} />
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={otraSolicitud}
+                    className="flex min-h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                    <Mail size={17} />
+                    Enviar a otro correo
+                  </button>
+                </div>
               </div>
-            </>
-          )}
+            )}
+          </motion.div>
+        </div>
 
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <p className="text-[#64748b]/60 text-xs">
-              ¿No tienes acceso? Contacta al administrador del sistema
-            </p>
-          </div>
+        {/* FOOTER */}
 
-        </motion.div>
-      </div>
-    </div>
+        <footer className="relative z-10 shrink-0 px-5 py-3 text-center">
+          <p className="text-[11px] text-slate-400">
+            © {new Date().getFullYear()} AutoCore · Centro de Operaciones Vehiculares
+          </p>
+        </footer>
+      </section>
+    </main>
   );
 }

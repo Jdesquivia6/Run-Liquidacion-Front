@@ -1,1589 +1,1815 @@
-import { useState, useRef, useEffect } from "react";
+
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import toast from "react-hot-toast";
-import PageHeroHeader from "../components/PageHeroHeader";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import {
-  validarArchivoExcel,
-  guardarDocumentos,
-  obtenerDocumentosParaProcesar,
-  listarResultados,
-  listarPendientes,
-  listarHistorial,
-  limpiarDocumentos,
-  listarPendientesApi,
-  limpiarDocumentosApi,
-  enviarAnioExterno,
-  obtenerErroresEnvio
+  Upload, CheckCircle2, AlertCircle, Loader2, Search,
+  MapPin, Eye, X, Database, Download, Trash2,
+  PlugZap, Send, CalendarDays, Layers3, RefreshCw,
+  Info, IdCard, Check, ChevronDown, ChevronLeft,
+  ChevronRight, FileSpreadsheet, ClipboardList, Clock3
+} from "lucide-react";
+import {
+  validarArchivoExcel, guardarDocumentos, listarPendientes,
+  listarResultados, listarPendientesApi, enviarAnioExterno,
+  obtenerErroresEnvio, listarHistorial
 } from "../services/ubicabilidadPersonasApi";
 import { crearJob } from "../services/workerJobsApi";
-import {
-  Upload, FileText, CheckCircle2, AlertCircle,
-  Loader2, Search, MapPin, Eye, X, Database, Download, Trash2, PlugZap, Send,
-  CalendarDays, Layers3, LayoutGrid, RefreshCw, Info, IdCard, Check,
-  ChevronDown, AlertTriangle
-} from "lucide-react";
 import DocumentosSwiper from "../components/DocumentosSwiper";
 import JobProgress from "../components/JobProgress";
 import ConfirmModal from "../components/ConfirmModal";
 import ErroresEnvioModal from "../components/ErroresEnvioModal";
 
-const POR_JOB = 90;
+// ======================================================
+// CONFIGURACIÓN
+// ======================================================
 
-// Orígenes que crea este módulo. Debe mantenerse en sincronía con
-// ORIGENES_MODULO de ScrapingRC/controllers/ubicabilidadPersonas.controller.js
-const ORIGENES_MODULO = ["CARGADO_POR_EXCEL", "API_CONTRAVENCIONES", "API_TEST"];
+const POR_JOB = 90;
+const POR_PAGINA = 10;
+const ORIGENES = [
+  "CARGADO_POR_EXCEL",
+  "API_CONTRAVENCIONES",
+  "API_TEST"
+];
+
+const CARD = "rounded-2xl border border-slate-200 bg-white shadow-sm";
+const BTN = "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm";
+const PRIMARY = `${BTN} bg-[#00ABE4] text-white hover:bg-[#0095C5]`;
+const OUTLINE = `${BTN} border border-slate-200 bg-white text-slate-600 hover:bg-slate-50`;
+const GREEN = `${BTN} bg-emerald-600 text-white hover:bg-emerald-700`;
+const INPUT = "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#00ABE4]";
+
+const numero = v => Number(v || 0).toLocaleString("es-CO");
+const separarDocs = v => String(v || "").split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+const errorApi = (e, fallback) => e?.response?.data?.error || e?.message || fallback;
+const anioTexto = v => v === "" || v == null || !Number(v) ? "Sin año" : String(v);
+const fechaCol = v => {
+  if (!v) return "—";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? "—" :
+    d.toLocaleDateString("es-CO", { timeZone: "America/Bogota" });
+};
+const fechaArchivo = () => new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit"
+}).format(new Date());
+
+const estadoResultado = r => {
+  if (r.error_consulta_direccion) return ["Error", "bg-red-50 text-red-700"];
+  if (!r.direccion_consultada) return ["Pendiente", "bg-amber-50 text-amber-700"];
+  if (r.direccion_encontrada) return ["Encontrada", "bg-emerald-50 text-emerald-700"];
+  return ["Sin dirección", "bg-slate-100 text-slate-600"];
+};
+
+const normalizarGrupoApi = g => {
+  const documentos = Array.isArray(g?.documentos) ? g.documentos : [];
+  const enCola = Number(g?.enCola || 0);
+  const porProcesar = Number(g?.porProcesar ?? documentos.length);
+  return {
+    ...g,
+    origen: g?.origen || "",
+    anio: g?.anio == null ? null : Number(g.anio),
+    tipoDocumento: g?.tipoDocumento || "SIN_TIPO",
+    documentos,
+    enCola,
+    porProcesar,
+    total: Number(g?.total ?? porProcesar + enCola)
+  };
+};
+
+// Acepta grupos o una lista plana si el servicio de BD utiliza
+// alguna de esas dos estructuras.
+const normalizarPendientesExcel = respuesta => {
+  const data = respuesta?.data || respuesta || {};
+  let grupos = [];
+
+  if (Array.isArray(data.grupos)) {
+    grupos = data.grupos.map(g => ({
+      tipoDocumento: g.tipoDocumento || g.tipo || g.tipo_documento || "SIN_TIPO",
+      documentos: (g.documentos || []).map(d =>
+        typeof d === "object" && d !== null
+          ? String(d.numeroDocumento ?? d.numero ?? d.numero_documento ?? d.documento ?? "")
+          : String(d)
+      ).filter(Boolean).slice(0, POR_JOB),
+      total: Number(g.total ?? g.porProcesar ?? g.documentos?.length ?? 0)
+    }));
+  } else {
+    const filas = Array.isArray(data.personas) ? data.personas :
+      Array.isArray(data.documentos) ? data.documentos :
+        Array.isArray(data.results) ? data.results : [];
+
+    const mapa = new Map();
+
+    filas.forEach(d => {
+      const tipo = String(d.tipoDocumento ?? d.tipo ?? d.tipo_documento ?? "SIN_TIPO");
+      const doc = String(d.numeroDocumento ?? d.numero ?? d.numero_documento ?? d.documento ?? "").trim();
+      if (!doc) return;
+      if (!mapa.has(tipo)) mapa.set(tipo, []);
+      mapa.get(tipo).push(doc);
+    });
+
+    grupos = [...mapa.entries()].map(([tipoDocumento, documentos]) => ({
+      tipoDocumento,
+      documentos: documentos.slice(0, POR_JOB),
+      total: documentos.length
+    }));
+  }
+
+  return {
+    grupos: grupos.filter(g => g.documentos.length),
+    total: Number(data.total ?? grupos.reduce((n, g) => n + g.total, 0))
+  };
+};
+
+// ======================================================
+// COMPONENTES
+// ======================================================
+
+function Indicador({ titulo, valor, icono: Icon, color = "sky" }) {
+  const tonos = {
+    sky: "bg-sky-50 text-sky-600",
+    green: "bg-emerald-50 text-emerald-600",
+    amber: "bg-amber-50 text-amber-600"
+  };
+
+  return (
+    <div className={`${CARD} flex items-center gap-3 p-4`}>
+      <div className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex ${tonos[color]}`}>
+        <Icon size={20} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-slate-500">{titulo}</p>
+        <p className="mt-1 truncate text-xl font-bold text-slate-900">{valor}</p>
+      </div>
+    </div>
+  );
+}
+
+function Titulo({ icono: Icon, titulo, descripcion, derecha }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div className="rounded-xl bg-sky-50 p-2.5 text-[#0095C5]">
+          <Icon size={19} />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-slate-900">{titulo}</h2>
+          {descripcion && <p className="mt-1 text-xs text-slate-500">{descripcion}</p>}
+        </div>
+      </div>
+      {derecha}
+    </div>
+  );
+}
+
+function Paso({ n, titulo, descripcion, children }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-[#0095C5]">
+          {n}
+        </div>
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">{titulo}</h3>
+          <p className="mt-1 text-xs text-slate-500">{descripcion}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Vacio({ icono: Icon, mensaje }) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+      <Icon size={27} className="mx-auto mb-3 text-slate-300" />
+      <p className="text-sm text-slate-500">{mensaje}</p>
+    </div>
+  );
+}
+
+function Paginacion({ page, pages, total, cambiar }) {
+  if (pages <= 1) return null;
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+      <p className="text-xs text-slate-500">
+        Mostrando {numero((page - 1) * POR_PAGINA + 1)} a{" "}
+        {numero(Math.min(page * POR_PAGINA, total))} de {numero(total)}
+      </p>
+      <div className="flex items-center gap-2">
+        <button type="button" className={`${OUTLINE} !px-3`}
+          disabled={page <= 1} onClick={() => cambiar(page - 1)}>
+          <ChevronLeft size={15} />
+        </button>
+        <span className="text-xs font-semibold text-slate-600">
+          Página {page} de {pages}
+        </span>
+        <button type="button" className={`${OUTLINE} !px-3`}
+          disabled={page >= pages} onClick={() => cambiar(page + 1)}>
+          <ChevronRight size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ======================================================
+// COMPONENTE PRINCIPAL
+// ======================================================
 
 export default function UbicabilidadPersonas() {
   const fileInputRef = useRef(null);
+  const procesandoRef = useRef(false);
 
+  // Importación Excel
   const [archivo, setArchivo] = useState(null);
   const [validando, setValidando] = useState(false);
-  const [resultadoValidacion, setResultadoValidacion] = useState(null);
-  const [procesando, setProcesando] = useState(false);
+  const [validacion, setValidacion] = useState(null);
 
-  // Resultados paginados
-  const [resultados, setResultados] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
-  const [cargandoResultados, setCargandoResultados] = useState(false);
-  const [filtros, setFiltros] = useState({ documento: "", estado: "" });
+  // Pendientes Excel desde BD
+  const [mostrarExcelBD, setMostrarExcelBD] = useState(false);
+  const [cargandoExcelBD, setCargandoExcelBD] = useState(false);
+  const [gruposExcel, setGruposExcel] = useState([]);
+  const [totalExcel, setTotalExcel] = useState(0);
+  const [grupoExcel, setGrupoExcel] = useState(null);
+  const [documentosExcel, setDocumentosExcel] = useState("");
 
-  // Jobs activos para monitoreo
-  const [jobsActivos, setJobsActivos] = useState([]);
-
-  // Personas pendientes desde BD
-  const [personasPendientes, setPersonasPendientes] = useState([]);
-  const [gruposPendientes, setGruposPendientes] = useState([]);
-  const [cargandoPendientes, setCargandoPendientes] = useState(false);
-  const [mostrarPendientes, setMostrarPendientes] = useState(false);
-  const [tipoDocumentoSeleccionado, setTipoDocumentoSeleccionado] = useState("");
-  const [documentosCargados, setDocumentosCargados] = useState("");
-  const [limitPendientes, setLimitPendientes] = useState(90);
-  const [confirmLimpiarOpen, setConfirmLimpiarOpen] = useState(false);
-
-  // ── Solicitudes API (servicios externos) — cola separada de fotodetección ──
-  const [mostrarPendientesApi, setMostrarPendientesApi] = useState(false);
-  const [cargandoPendientesApi, setCargandoPendientesApi] = useState(false);
-  const [origenesApi, setOrigenesApi] = useState([]);
+  // API
+  const [mostrarApi, setMostrarApi] = useState(false);
+  const [cargandoApi, setCargandoApi] = useState(false);
   const [aniosApi, setAniosApi] = useState([]);
+  const [origenesApi, setOrigenesApi] = useState([]);
+  const [gruposApi, setGruposApi] = useState([]);
   const [totalApi, setTotalApi] = useState(0);
   const [totalEnColaApi, setTotalEnColaApi] = useState(0);
-  const [gruposApi, setGruposApi] = useState([]);
-  const [anioSeleccionadoApi, setAnioSeleccionadoApi] = useState("");
-  const [origenSeleccionadoApi, setOrigenSeleccionadoApi] = useState("");
-  const [documentosApi, setDocumentosApi] = useState("");
-  const [tipoDocumentoApi, setTipoDocumentoApi] = useState("");
-  const [origenCargadoApi, setOrigenCargadoApi] = useState("");
-  const [anioCargadoApi, setAnioCargadoApi] = useState(null);
-  const [grupoCargadoApi, setGrupoCargadoApi] = useState(null);
-  const [confirmLimpiarApiOpen, setConfirmLimpiarApiOpen] = useState(false);
-
-  // Envío de resultados del scraping a CONTRAVENCIONES
-  const [anioEnviandoApi, setAnioEnviandoApi] = useState(null);
-  const [confirmEnvioAnioApi, setConfirmEnvioAnioApi] = useState(null);
-
-  // Respuestas rechazadas por CONTRAVENCIONES (detalle + reenvío)
+  const [anioApi, setAnioApi] = useState("");
+  const [origenApi, setOrigenApi] = useState("");
   const [mostrarCompletados, setMostrarCompletados] = useState(false);
+  const [grupoApi, setGrupoApi] = useState(null);
+  const [documentosApi, setDocumentosApi] = useState("");
+
+  // Workers
+  const [procesando, setProcesando] = useState(false);
+  const [jobs, setJobs] = useState([]);
+
+  // Envío externo
+  const [confirmEnvio, setConfirmEnvio] = useState(null);
+  const [anioEnviando, setAnioEnviando] = useState(null);
+
+  // Errores de envío
   const [erroresAbiertos, setErroresAbiertos] = useState(false);
   const [erroresCargando, setErroresCargando] = useState(false);
   const [erroresLista, setErroresLista] = useState([]);
   const [erroresError, setErroresError] = useState(null);
-  const [erroresContexto, setErroresContexto] = useState({ anio: "", etiqueta: "" });
+  const [erroresContexto, setErroresContexto] = useState({
+    anio: "", origen: "", etiqueta: ""
+  });
 
-  // Historial de consultados
-  const [historial, setHistorial] = useState([]);
-  const [cargandoHistorial, setCargandoHistorial] = useState(false);
-  // "" = los orígenes que crea este módulo (Excel + API). Un valor concreto
-  // restringe a ese origen. SCRAPING queda fuera: no pertenece a este módulo.
-  const [origenHistorial, setOrigenHistorial] = useState("");
+  // Resultados
+  const [resultados, setResultados] = useState([]);
+  const [cargandoResultados, setCargandoResultados] = useState(false);
+  const [pagina, setPagina] = useState({
+    page: 1, total: 0, totalPages: 0
+  });
+  const [filtros, setFiltros] = useState({ documento: "", estado: "" });
   const [origenResultados, setOrigenResultados] = useState("");
 
-  useEffect(() => {
-    cargarHistorial();
-  }, []);
+  // Historial
+  const [historial, setHistorial] = useState([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [origenHistorial, setOrigenHistorial] = useState("");
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
+  const ocupado = procesando || validando;
+
+  // ====================================================
+  // CARGA EXCEL Y GUARDADO EN BD
+  // ====================================================
+
+  const seleccionarArchivo = e => {
+    const file = e.target.files?.[0];
     if (!file) return;
     const ext = file.name.split(".").pop().toLowerCase();
+
     if (!["xlsx", "xls", "csv"].includes(ext)) {
-      toast.error("Formato no permitido. Use .xlsx, .xls o .csv");
+      toast.error("Seleccione un archivo .xlsx, .xls o .csv");
+      e.target.value = "";
       return;
     }
     setArchivo(file);
-    setResultadoValidacion(null);
+    setValidacion(null);
   };
 
-  const handleLimpiar = () => {
+  const limpiarArchivo = () => {
     setArchivo(null);
-    setResultadoValidacion(null);
+    setValidacion(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const cargarPersonasPendientes = async (limit = limitPendientes) => {
+  const validarEInsertar = async () => {
+    if (!archivo || validando) return;
     try {
-      setCargandoPendientes(true);
-      // Las dos fuentes nunca se mezclan en el mismo textarea
-      setDocumentosApi("");
-      setMostrarPendientesApi(false);
-      const resp = await listarPendientes(limit);
-      if (resp.ok) {
-        setPersonasPendientes(resp.personas || []);
-        setGruposPendientes(resp.grupos || []);
-        setMostrarPendientes(true);
-        // Auto-cargar primer grupo
-        if (resp.grupos?.length > 0) {
-          const primerGrupo = resp.grupos[0];
-          setDocumentosCargados(primerGrupo.documentos.join("\n"));
-          setTipoDocumentoSeleccionado(primerGrupo.tipoDocumento);
-        }
-        toast.success(`${resp.total} pendiente(s). Se cargó el primer tipo.`);
-      } else {
-        toast.error(resp.error || "Error cargando pendientes");
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error cargando pendientes");
-    } finally {
-      setCargandoPendientes(false);
-    }
-  };
+      setValidando(true);
+      setValidacion(null);
 
-  const handleLimpiarDocumentos = () => {
-    setConfirmLimpiarOpen(true);
-  };
+      const formData = new FormData();
+      formData.append("archivo", archivo);
 
-  const handleConfirmLimpiar = async () => {
-    setConfirmLimpiarOpen(false);
-    try {
-      const resp = await limpiarDocumentos();
-      if (resp.ok) {
-        toast.success(resp.mensaje, { duration: 6000 });
-        setMostrarPendientes(false);
-        setDocumentosCargados("");
-        setPersonasPendientes([]);
-        setGruposPendientes([]);
-      } else {
-        toast.error(resp.error || "Error limpiando documentos");
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error limpiando documentos");
-    }
-  };
+      const resp = await validarArchivoExcel(formData);
+      if (resp?.ok === false) throw new Error(resp.error || "Error validando archivo");
 
-  const cargarGrupoEnTextarea = (grupo) => {
-    setDocumentosCargados(grupo.documentos.join("\n"));
-    setTipoDocumentoSeleccionado(grupo.tipoDocumento);
-    setMostrarPendientes(false);
-    toast.success(`${grupo.documentos.length} documento(s) del grupo "${grupo.tipoDocumento}" cargado(s)`);
-  };
+      const data = resp.data || {};
+      const documentos = data.documentos || [];
 
-  /* ─────────────── Solicitudes API (servicios externos) ─────────────── */
-
-  // Acepta tanto el formato nuevo (porProcesar/enCola/anio) como el viejo
-  // (count, sin anio) para que un backend desactualizado no se vea roto.
-  const normalizarGrupoApi = (grupo) => {
-    const documentos = grupo?.documentos || [];
-    const enCola = Number.isFinite(grupo?.enCola) ? grupo.enCola : 0;
-    const porProcesar = Number.isFinite(grupo?.porProcesar)
-      ? grupo.porProcesar
-      : documentos.length;
-
-    return {
-      ...grupo,
-      origen: grupo?.origen || "",
-      tipoDocumento: grupo?.tipoDocumento || "SIN_TIPO",
-      anio: Number.isFinite(grupo?.anio) ? grupo.anio : null,
-      documentos,
-      enCola,
-      porProcesar,
-      total: Number.isFinite(grupo?.total) ? grupo.total : porProcesar + enCola
-    };
-  };
-
-  const cargarSolicitudesApi = async (origen = origenSeleccionadoApi, anio = anioSeleccionadoApi) => {
-    try {
-      setCargandoPendientesApi(true);
-      // Las dos fuentes nunca se mezclan en el mismo textarea
-      setDocumentosCargados("");
-      setMostrarPendientes(false);
-      const resp = await listarPendientesApi(5000, origen, anio);
-      if (!resp.ok) {
-        toast.error(resp.error || "Error cargando solicitudes API");
+      if (!documentos.length) {
+        setValidacion(data);
+        toast("No hay documentos válidos para insertar");
         return;
       }
 
-      const anios = (resp.anios || []).filter((a) => Number.isFinite(a?.anio));
-      const grupos = (resp.grupos || []).map(normalizarGrupoApi);
-
-      setAniosApi(anios);
-      setOrigenesApi(resp.origenes || []);
-      setTotalApi(resp.total || 0);
-      setTotalEnColaApi(resp.totalEnCola || 0);
-      setGruposApi(grupos);
-      setMostrarPendientesApi(true);
-
-      // El backend viejo no devuelve "anios": avisamos en vez de dejar la
-      // sección de años vacía sin explicación.
-      if (!Array.isArray(resp.anios)) {
-        toast.error(
-          "El servidor no devuelve los años: el backend atendiendo el puerto no está corriendo el código nuevo. Reinícialo y recarga.",
-          { duration: 8000 }
-        );
-      }
-
-      // Recargar SOLO refresca los contadores: nunca abre la ventana de
-      // creación por su cuenta. El lote se carga dando clic en una tarjeta
-      // de grupo, así no se puede encolar otro trabajo sin querer.
-      setDocumentosApi("");
-      setTipoDocumentoApi("");
-      setOrigenCargadoApi("");
-      setAnioCargadoApi(null);
-      setGrupoCargadoApi(null);
-
-      const totalEnCola = resp.totalEnCola || 0;
-      const porProcesar = Math.max((resp.total || 0) - totalEnCola, 0);
-      toast.success(
-        `${resp.total || 0} pendiente(s) · ${totalEnCola} en cola · ${porProcesar} por procesar`,
-        { duration: 5000 }
+      const guardado = await guardarDocumentos(
+        documentos.map(d => ({ tipo: d.tipo, numero: d.numero }))
       );
+
+      if (guardado?.ok === false) {
+        throw new Error(guardado.error || "No se pudieron guardar los documentos");
+      }
+
+      setValidacion(data);
+      toast.success(guardado.mensaje || "Documentos insertados en la base de datos");
+
+      // Solo se insertan documentos. No se crean jobs.
+      setGruposExcel([]);
+      setTotalExcel(0);
+      setGrupoExcel(null);
+      setDocumentosExcel("");
     } catch (err) {
-      toast.error(err.response?.data?.error || "Error cargando solicitudes API");
-    } finally {
-      setCargandoPendientesApi(false);
-    }
-  };
-
-  const etiquetaAnio = (anio) =>
-    !Number.isFinite(anio) ? "Sin año" : anio === 0 ? "Sin año" : String(anio);
-
-  // Solo refresca contadores; nunca toca el textarea cargado.
-  const refrescarContadoresApi = async () => {
-    try {
-      const resp = await listarPendientesApi(5000, origenSeleccionadoApi, anioSeleccionadoApi);
-      if (!resp.ok) return;
-      setAniosApi((resp.anios || []).filter((a) => Number.isFinite(a?.anio)));
-      setOrigenesApi(resp.origenes || []);
-      setTotalApi(resp.total || 0);
-      setTotalEnColaApi(resp.totalEnCola || 0);
-      setGruposApi((resp.grupos || []).map(normalizarGrupoApi));
-    } catch {
-      // silencioso: el envío ya se reportó por toast
-    }
-  };
-
-  const handleConfirmEnvioAnio = async () => {
-    const destino = confirmEnvioAnioApi;
-    setConfirmEnvioAnioApi(null);
-    if (!destino) return;
-
-    setAnioEnviandoApi(destino.anio);
-    try {
-      const resp = await enviarAnioExterno(destino.anio, origenSeleccionadoApi);
-
-      if (resp.exitosas > 0 || resp.yaExistian > 0) {
-        toast.success(
-          `Año ${etiquetaAnio(destino.anio)}: ${resp.exitosas} enviada(s) · ` +
-            `${resp.yaExistian} ya existían · ${resp.enviadas} en total`,
-          { duration: 8000 }
-        );
-      }
-      if (resp.fallidas > 0) {
-        toast.error(`${resp.fallidas} no se pudieron enviar.`, { duration: 8000 });
-      }
-      if (resp.noSoportadas > 0) {
-        toast(
-          `${resp.noSoportadas} no se enviaron por tipo de documento no soportado ` +
-            `(${Object.keys(resp.porTipoNoSoportado || {}).join(", ")}).`,
-          { icon: "⚠️", duration: 9000 }
-        );
-      }
-      if (resp.mensaje) toast(resp.mensaje);
-
-      await refrescarContadoresApi();
-    } catch (err) {
-      toast.error(err.response?.data?.error || err.message || "No se pudo enviar a contravenciones", {
-        duration: 8000
-      });
-    } finally {
-      setAnioEnviandoApi(null);
-    }
-  };
-
-  const seleccionarGrupoApi = (grupo) => {
-    const porProcesar = grupo.porProcesar ?? grupo.documentos?.length ?? 0;
-    const lote = (grupo.documentos || []).slice(0, POR_JOB);
-
-    setDocumentosApi(lote.join("\n"));
-    setTipoDocumentoApi(grupo.tipoDocumento);
-    setOrigenCargadoApi(grupo.origen);
-    setAnioCargadoApi(grupo.anio);
-    setGrupoCargadoApi(grupo);
-
-    toast.success(
-      porProcesar > POR_JOB
-        ? `${lote.length} de ${porProcesar} documento(s) cargados (lote de ${POR_JOB}). Pulsa "Crear lote": la ventana se cierra sola y vuelves a la tarjeta para el siguiente lote.`
-        : `${porProcesar} documento(s) cargados`
-    );
-  };
-
-  const cambiarAnioApi = async (anio) => {
-    setAnioSeleccionadoApi(anio);
-    setOrigenSeleccionadoApi("");
-    await cargarSolicitudesApi("", anio);
-  };
-
-  const cambiarOrigenApi = async (origen) => {
-    setOrigenSeleccionadoApi(origen);
-    await cargarSolicitudesApi(origen, anioSeleccionadoApi);
-  };
-
-  const handleCrearJobDesdeApi = async () => {
-    const docs = documentosApi.split(/[\n,;]+/).map((d) => d.trim()).filter(Boolean);
-    if (docs.length === 0) {
-      toast.error("No hay documentos para procesar");
-      return;
-    }
-    const lote = docs.slice(0, POR_JOB);
-    if (docs.length > POR_JOB) {
-      toast(`Se envían los primeros ${POR_JOB} de ${docs.length} documento(s)`, { duration: 5000 });
-    }
-    try {
-      setProcesando(true);
-      const items = lote.map((d) => ({
-        tipoDocumento: tipoDocumentoApi,
-        numeroDocumento: d
-      }));
-      const resp = await crearJob("ubicabilidad-personas", items);
-
-      const nuevosJobs = [];
-      const siguiente = `Da clic en una tarjeta para cargar el siguiente lote de ${POR_JOB}.`;
-      if (resp.jobs && resp.jobs.length > 0) {
-        nuevosJobs.push(...resp.jobs.map((j) => j.id_job));
-        toast.success(
-          `${resp.message || `Se crearon ${resp.jobs.length} trabajos`} ${siguiente}`,
-          { duration: 7000 }
-        );
-      } else if (resp.job?.id_job) {
-        nuevosJobs.push(resp.job.id_job);
-        toast.success(
-          `${resp.message || `Trabajo creado con ${items.length} documento(s)`} ${siguiente}`,
-          { duration: 7000 }
-        );
-      }
-
-      if (nuevosJobs.length > 0) {
-        setJobsActivos((prev) => [...prev, ...nuevosJobs]);
-        // La ventana se cierra de inmediato: si quedara abierta, un segundo
-        // clic en "Crear Job" volvería a encolar el mismo lote.
-        setDocumentosApi("");
-        setTipoDocumentoApi("");
-        setGrupoCargadoApi(null);
-        // Recargar: los recién encolados dejan de aparecer como "por procesar"
-        await cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error al crear trabajo");
-    } finally {
-      setProcesando(false);
-    }
-  };
-
-  const handleConfirmLimpiarApi = async () => {
-    setConfirmLimpiarApiOpen(false);
-    try {
-      const resp = await limpiarDocumentosApi(origenSeleccionadoApi, anioSeleccionadoApi);
-      if (resp.ok) {
-        toast.success(resp.mensaje, { duration: 6000 });
-        setDocumentosApi("");
-        await cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi);
-      } else {
-        toast.error(resp.error || "Error limpiando solicitudes API");
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error limpiando solicitudes API");
-    }
-  };
-
-  const handleCrearJobDesdeBD = async () => {
-    const docs = documentosCargados.split(/[\n,;]+/).map(d => d.trim()).filter(Boolean);
-    if (docs.length === 0) {
-      toast.error("No hay documentos para procesar");
-      return;
-    }
-    try {
-      setProcesando(true);
-      const items = docs.map(d => ({
-        tipoDocumento: tipoDocumentoSeleccionado,
-        numeroDocumento: d
-      }));
-      const resp = await crearJob("ubicabilidad-personas", items);
-
-      const nuevosJobs = [];
-      if (resp.jobs && resp.jobs.length > 0) {
-        nuevosJobs.push(...resp.jobs.map(j => j.id_job));
-        toast.success(resp.message || `Se crearon ${resp.jobs.length} trabajos`);
-      } else if (resp.job?.id_job) {
-        nuevosJobs.push(resp.job.id_job);
-        toast.success(`Trabajo creado con ${items.length} documento(s)`);
-      }
-
-      if (nuevosJobs.length > 0) {
-        setJobsActivos(prev => [...prev, ...nuevosJobs]);
-        setDocumentosCargados("");
-        setMostrarPendientes(false);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error al crear trabajo");
-    } finally {
-      setProcesando(false);
-    }
-  };
-
-  const handleValidar = async () => {
-    if (!archivo) {
-      toast.error("Seleccione un archivo primero");
-      return;
-    }
-    try {
-      setValidando(true);
-      const formData = new FormData();
-      formData.append("archivo", archivo);
-      const resp = await validarArchivoExcel(formData);
-      if (resp.ok) {
-        setResultadoValidacion(resp.data);
-        toast.success("Archivo validado correctamente");
-
-        // Guardar documentos en BD automáticamente
-        if (resp.data.documentos?.length > 0) {
-          const docsParaGuardar = resp.data.documentos.map(d => ({
-            tipo: d.tipo,
-            numero: d.numero
-          }));
-          const guardarResp = await guardarDocumentos(docsParaGuardar);
-          if (guardarResp.ok) {
-            toast.success(`BD: ${guardarResp.mensaje}`, { duration: 8000 });
-          } else {
-            toast.error("Error guardando en BD: " + (guardarResp.error || "Desconocido"));
-          }
-        }
-      } else {
-        toast.error(resp.error);
-      }
-    } catch {
-      toast.error("Error al validar el archivo");
+      toast.error(errorApi(err, "Error validando o insertando documentos"));
     } finally {
       setValidando(false);
     }
   };
 
-  const handleIniciarScraping = async () => {
-    if (!resultadoValidacion?.documentos?.length) {
-      toast.error("No hay documentos válidos para procesar");
-      return;
-    }
+  // ====================================================
+  // DOCUMENTOS EXCEL PENDIENTES DESDE BD
+  // ====================================================
+
+  const cargarPendientesExcel = async () => {
+    if (cargandoExcelBD || ocupado) return;
     try {
-      setProcesando(true);
-      const items = resultadoValidacion.documentos.map(d => ({
-        tipoDocumento: d.tipo,
-        numeroDocumento: d.numero
-      }));
-      const resp = await crearJob("ubicabilidad-personas", items);
+      setCargandoExcelBD(true);
 
-      const nuevosJobs = [];
-      if (resp.jobs && resp.jobs.length > 0) {
-        nuevosJobs.push(...resp.jobs.map(j => j.id_job));
-        toast.success(resp.message || `Se crearon ${resp.jobs.length} trabajos`);
-      } else if (resp.job?.id_job) {
-        nuevosJobs.push(resp.job.id_job);
-        toast.success(`Trabajo creado con ${items.length} documento(s)`);
+      const resp = await listarPendientes(POR_JOB);
+      if (resp?.ok === false) {
+        throw new Error(resp.error || "Error consultando documentos pendientes");
       }
 
-      if (nuevosJobs.length > 0) {
-        setJobsActivos(nuevosJobs);
-        setArchivo(null);
-        setResultadoValidacion(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }
+      const data = normalizarPendientesExcel(resp);
+      setGruposExcel(data.grupos);
+      setTotalExcel(data.total);
+      setMostrarExcelBD(true);
+      setGrupoExcel(null);
+      setDocumentosExcel("");
+
+      if (!data.grupos.length) toast("No hay documentos pendientes de Excel");
+      else toast.success(`${data.grupos.length} grupo(s) de documentos disponibles`);
     } catch (err) {
-      toast.error(err.response?.data?.error || "Error al crear trabajo");
+      toast.error(errorApi(err, "Error cargando pendientes desde BD"));
     } finally {
-      setProcesando(false);
+      setCargandoExcelBD(false);
     }
   };
 
-  const cargarResultados = async (page = 1, origenOverride) => {
+  const seleccionarGrupoExcel = grupo => {
+    if (ocupado) return;
+    const docs = grupo.documentos.slice(0, POR_JOB);
+    if (!docs.length) return toast.error("No hay documentos en este grupo");
+
+    setGrupoApi(null);
+    setDocumentosApi("");
+    setGrupoExcel(grupo);
+    setDocumentosExcel(docs.join("\n"));
+    toast.success(`${docs.length} documentos cargados para el lote`);
+  };
+
+  // ====================================================
+  // SOLICITUDES API
+  // ====================================================
+
+  const cargarApi = async (
+    origen = origenApi,
+    anio = anioApi,
+    limpiar = true
+  ) => {
+    try {
+      setCargandoApi(true);
+      const resp = await listarPendientesApi(5000, origen, anio);
+      if (resp?.ok === false) throw new Error(resp.error || "Error cargando API");
+
+      setAniosApi((resp.anios || []).filter(a => Number.isFinite(Number(a?.anio))));
+      setOrigenesApi(resp.origenes || []);
+      setGruposApi((resp.grupos || []).map(normalizarGrupoApi));
+      setTotalApi(Number(resp.total || 0));
+      setTotalEnColaApi(Number(resp.totalEnCola || 0));
+      setMostrarApi(true);
+
+      if (limpiar) {
+        setGrupoApi(null);
+        setDocumentosApi("");
+      }
+      if (!Array.isArray(resp.anios)) {
+        toast.error("El backend no está devolviendo los años");
+      }
+    } catch (err) {
+      toast.error(errorApi(err, "Error cargando solicitudes API"));
+    } finally {
+      setCargandoApi(false);
+    }
+  };
+
+  const refrescarApi = async () => {
+    try {
+      const resp = await listarPendientesApi(5000, origenApi, anioApi);
+      if (resp?.ok === false) return;
+      setAniosApi((resp.anios || []).filter(a => Number.isFinite(Number(a?.anio))));
+      setOrigenesApi(resp.origenes || []);
+      setGruposApi((resp.grupos || []).map(normalizarGrupoApi));
+      setTotalApi(Number(resp.total || 0));
+      setTotalEnColaApi(Number(resp.totalEnCola || 0));
+    } catch {
+      // Una actualización fallida no interrumpe los jobs.
+    }
+  };
+
+  const cambiarAnio = valor => {
+    setAnioApi(valor);
+    setOrigenApi("");
+    cargarApi("", valor);
+  };
+
+  const cambiarOrigen = valor => {
+    setOrigenApi(valor);
+    cargarApi(valor, anioApi);
+  };
+
+  const seleccionarGrupoApi = grupo => {
+    if (ocupado || grupo.porProcesar <= 0) return;
+    const docs = grupo.documentos.slice(0, POR_JOB);
+    if (!docs.length) return toast.error("No hay documentos disponibles");
+
+    setGrupoExcel(null);
+    setDocumentosExcel("");
+    setGrupoApi(grupo);
+    setDocumentosApi(docs.join("\n"));
+
+    toast.success(`${docs.length} documentos API cargados`);
+  };
+
+  // ====================================================
+  // CREACIÓN DE TRABAJOS
+  // ====================================================
+
+  const registrarJob = resp => {
+    const ids = Array.isArray(resp?.jobs)
+      ? resp.jobs.map(j => j.id_job).filter(Boolean)
+      : resp?.job?.id_job ? [resp.job.id_job] : [];
+
+    if (!ids.length) throw new Error("El servidor no devolvió un ID de trabajo");
+    setJobs(prev => [...new Set([...prev, ...ids])]);
+  };
+
+  const crearTrabajo = async fuente => {
+    if (procesandoRef.current) return;
+
+    const grupo = fuente === "excel" ? grupoExcel : grupoApi;
+    const texto = fuente === "excel" ? documentosExcel : documentosApi;
+
+    if (!grupo) return toast.error("Seleccione un grupo de documentos");
+
+    const tipoDocumento = grupo.tipoDocumento;
+    const documentos = [...new Set(separarDocs(texto))];
+
+    if (!tipoDocumento || !documentos.length) {
+      return toast.error("No hay documentos válidos para procesar");
+    }
+    if (documentos.length > POR_JOB) {
+      return toast.error(`Máximo ${POR_JOB} documentos por trabajo`);
+    }
+
+    // No permitir enviar documentos ajenos a los recuperados desde BD/API.
+    const permitidos = new Set(grupo.documentos.map(String));
+    if (documentos.some(d => !permitidos.has(d))) {
+      return toast.error("El lote contiene documentos que no pertenecen al grupo cargado");
+    }
+
+    procesandoRef.current = true;
+
+    try {
+      setProcesando(true);
+
+      const items = documentos.map(numeroDocumento => ({
+        tipoDocumento,
+        numeroDocumento
+      }));
+
+      const resp = await crearJob("ubicabilidad-personas", items);
+      registrarJob(resp);
+
+      toast.success(`Trabajo creado con ${items.length} documentos`);
+
+      if (fuente === "excel") {
+        setGrupoExcel(null);
+        setDocumentosExcel("");
+        // Tras encolar, actualizamos los pendientes.
+        // El backend debe excluir documentos ya en cola.
+        try {
+          const pendientes = await listarPendientes(POR_JOB);
+          if (pendientes?.ok !== false) {
+            const info = normalizarPendientesExcel(pendientes);
+            setGruposExcel(info.grupos);
+            setTotalExcel(info.total);
+          }
+        } catch {
+          toast("Trabajo creado. Actualice los pendientes para consultar el siguiente lote");
+        }
+      } else {
+        setGrupoApi(null);
+        setDocumentosApi("");
+        await cargarApi(origenApi, anioApi, false);
+      }
+    } catch (err) {
+      toast.error(errorApi(err, "Error creando trabajo"));
+    } finally {
+      setProcesando(false);
+      procesandoRef.current = false;
+    }
+  };
+
+  // ====================================================
+  // RESULTADOS
+  // ====================================================
+
+  const cargarResultados = async (
+    page = 1,
+    origen = origenResultados,
+    filtrosActuales = filtros
+  ) => {
     try {
       setCargandoResultados(true);
-      // origenOverride: el cambio de origen recarga de una vez, sin esperar a
-      // que el estado de React se asiente.
-      const origen = origenOverride !== undefined ? origenOverride : origenResultados;
       const resp = await listarResultados({
         page,
-        limit: pagination.limit,
-        documento: filtros.documento || undefined,
-        estado: filtros.estado || undefined,
+        limit: POR_PAGINA,
+        documento: filtrosActuales.documento || undefined,
+        estado: filtrosActuales.estado || undefined,
         origen: origen || undefined
       });
-      if (resp.ok) {
-        setResultados(resp.data.results);
-        setPagination(resp.data.pagination);
+
+      if (resp?.ok === false) {
+        throw new Error(resp.error || "Error cargando resultados");
       }
-    } catch {
-      toast.error("Error cargando resultados");
+
+      setResultados(resp.data?.results || []);
+      setPagina({
+        page: Number(resp.data?.pagination?.page || page),
+        total: Number(resp.data?.pagination?.total || 0),
+        totalPages: Number(resp.data?.pagination?.totalPages || 0)
+      });
+    } catch (err) {
+      toast.error(errorApi(err, "Error cargando resultados"));
     } finally {
       setCargandoResultados(false);
     }
   };
 
-  const handleFiltroChange = (e) => {
-    setFiltros({ ...filtros, [e.target.name]: e.target.value });
-  };
+  // ====================================================
+  // HISTORIAL
+  // ====================================================
 
-  const aplicarFiltros = () => {
-    cargarResultados(1);
-  };
-
-  const cargarHistorial = async (origenOverride) => {
+  const cargarHistorial = useCallback(async (origen = "") => {
     try {
       setCargandoHistorial(true);
-      const origen = origenOverride !== undefined ? origenOverride : origenHistorial;
       const resp = await listarHistorial(origen);
-      if (resp.ok) {
-        setHistorial(resp.results || []);
-      } else {
-        toast.error(resp.error || "Error cargando historial");
-      }
+      if (resp?.ok === false) throw new Error(resp.error || "Error cargando historial");
+      setHistorial(resp.results || []);
     } catch (err) {
-      toast.error("Error cargando historial");
+      toast.error(errorApi(err, "Error cargando historial"));
     } finally {
       setCargandoHistorial(false);
     }
-  };
+  }, []);
 
-  const exportarExcel = () => {
-    if (historial.length === 0) {
-      toast.error("No hay datos para exportar");
+  useEffect(() => {
+    cargarHistorial("");
+  }, [cargarHistorial]);
+
+
+  const exportarExcel = async () => {
+    if (!historial.length) {
+      toast.error("No hay registros para exportar");
       return;
     }
-    const columnas = [
-      "Tipo Documento", "Número Documento", "Nombres", "Apellidos",
-      "Celular", "Correo", "Dirección", "Municipio / Departamento",
-      "Teléfono", "Tipo Dirección", "Fecha Consulta"
-    ];
-    const filas = historial.map(item => [
-      item.tipo_documento || "",
-      item.numero_documento || "",
-      item.nombres || "",
-      item.apellidos || "",
-      item.celular || "",
-      item.correo || "",
-      item.direccion || "",
-      item.municio_departamento || "",
-      item.telefono || "",
-      item.tipo_direccion || "",
-      item.fecha_consulta_direccion
-        ? new Date(item.fecha_consulta_direccion).toLocaleString("es-CO", { timeZone: "America/Bogota" })
-        : ""
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([columnas, ...filas]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Historial Ubicabilidad");
-    ws["!cols"] = columnas.map(() => ({ wch: 22 }));
-    XLSX.writeFile(wb, `historial_ubicabilidad_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    toast.success(`Excel generado: ${historial.length} registro(s)`);
+
+    const idToast = toast.loading("Generando Excel corporativo...");
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "AutoCore";
+      workbook.lastModifiedBy = "AutoCore";
+      workbook.title = "Historial de Ubicabilidad";
+      workbook.subject = "Consultas de direcciones RUNT";
+      workbook.created = new Date();
+
+      const sheet = workbook.addWorksheet("Historial Ubicabilidad", {
+        views: [{ state: "frozen", ySplit: 6 }],
+        pageSetup: {
+          paperSize: 9,
+          orientation: "landscape",
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0
+        }
+      });
+
+      const AZUL = "FF0095C5";
+      const CIAN = "FF00ABE4";
+      const BLANCO = "FFFFFFFF";
+      const TEXTO = "FF1E293B";
+      const GRIS = "FF64748B";
+      const BORDE = "FFE2E8F0";
+      const ALTERNA = "FFF0F7FC";
+      const VERDE = "FF047857";
+      const ROJO = "FFB91C1C";
+
+      // ==================================================
+      // COLUMNAS
+      // ==================================================
+
+      sheet.columns = [
+        { key: "tipo_documento", width: 24 },
+        { key: "numero_documento", width: 23 },
+        { key: "nombres", width: 30 },
+        { key: "apellidos", width: 30 },
+        { key: "celular", width: 19 },
+        { key: "correo", width: 37 },
+        { key: "direccion", width: 48 },
+        { key: "municipio", width: 34 },
+        { key: "telefono", width: 20 },
+        { key: "tipo_direccion", width: 24 },
+        { key: "fecha", width: 24 }
+      ];
+
+      // ==================================================
+      // ENCABEZADO CORPORATIVO
+      // ==================================================
+
+      sheet.mergeCells("A1:K2");
+
+      const titulo = sheet.getCell("A1");
+      titulo.value = "AUTOCORE  |  HISTORIAL DE UBICABILIDAD";
+      titulo.font = {
+        name: "Arial",
+        size: 17,
+        bold: true,
+        color: { argb: BLANCO }
+      };
+      titulo.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: AZUL }
+      };
+      titulo.alignment = {
+        vertical: "middle",
+        horizontal: "left",
+        indent: 1
+      };
+
+      sheet.getRow(1).height = 25;
+      sheet.getRow(2).height = 25;
+
+      sheet.mergeCells("A3:K3");
+      const subtitulo = sheet.getCell("A3");
+      subtitulo.value =
+        "CENTRO DE OPERACIONES VEHICULARES  |  CONSULTAS DE DIRECCIONES RUNT";
+      subtitulo.font = {
+        name: "Arial",
+        size: 10,
+        color: { argb: GRIS },
+        bold: true
+      };
+      subtitulo.alignment = {
+        vertical: "middle",
+        indent: 1
+      };
+      sheet.getRow(3).height = 25;
+
+      // ==================================================
+      // INFORMACIÓN DEL REPORTE
+      // ==================================================
+
+      const fechaGeneracion = new Date().toLocaleString("es-CO", {
+        timeZone: "America/Bogota",
+        dateStyle: "medium",
+        timeStyle: "short"
+      });
+
+      const origen = origenHistorial || "Excel e integraciones API";
+
+      sheet.mergeCells("A4:D4");
+      sheet.mergeCells("E4:H4");
+      sheet.mergeCells("I4:K4");
+
+      [
+        ["A4", `Registros: ${historial.length.toLocaleString("es-CO")}`],
+        ["E4", `Origen: ${origen}`],
+        ["I4", `Generado: ${fechaGeneracion}`]
+      ].forEach(([celda, valor]) => {
+        const c = sheet.getCell(celda);
+        c.value = valor;
+        c.font = {
+          name: "Arial",
+          size: 10,
+          bold: true,
+          color: { argb: TEXTO }
+        };
+        c.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE9F1FA" }
+        };
+        c.alignment = {
+          vertical: "middle",
+          indent: 1,
+          shrinkToFit: true
+        };
+      });
+
+      sheet.getRow(4).height = 30;
+      sheet.getRow(5).height = 9;
+
+      // ==================================================
+      // ENCABEZADOS DE LA TABLA
+      // ==================================================
+
+      const encabezados = [
+        "TIPO DOCUMENTO",
+        "NÚMERO DOCUMENTO",
+        "NOMBRES",
+        "APELLIDOS",
+        "CELULAR",
+        "CORREO ELECTRÓNICO",
+        "DIRECCIÓN",
+        "MUNICIPIO / DEPARTAMENTO",
+        "TELÉFONO",
+        "TIPO DIRECCIÓN",
+        "FECHA CONSULTA"
+      ];
+
+      const filaHeader = sheet.getRow(6);
+      filaHeader.values = encabezados;
+      filaHeader.height = 32;
+
+      filaHeader.eachCell({ includeEmpty: true }, celda => {
+        celda.font = {
+          name: "Arial",
+          size: 10,
+          bold: true,
+          color: { argb: BLANCO }
+        };
+
+        celda.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: CIAN }
+        };
+
+        celda.alignment = {
+          vertical: "middle",
+          horizontal: "center",
+          wrapText: true
+        };
+
+        celda.border = {
+          bottom: {
+            style: "medium",
+            color: { argb: AZUL }
+          }
+        };
+      });
+
+      // ==================================================
+      // REGISTROS DEL HISTORIAL
+      // ==================================================
+
+      historial.forEach((item, index) => {
+        const fecha = item.fecha_consulta_direccion
+          ? new Date(item.fecha_consulta_direccion)
+          : null;
+
+        const fila = sheet.addRow({
+          tipo_documento: String(item.tipo_documento ?? ""),
+          numero_documento: String(item.numero_documento ?? ""),
+          nombres: String(item.nombres ?? ""),
+          apellidos: String(item.apellidos ?? ""),
+          celular: String(item.celular ?? ""),
+          correo: String(item.correo ?? ""),
+          direccion: String(item.direccion ?? ""),
+          municipio: String(
+            item.municipio_departamento ??
+            item.municio_departamento ??
+            ""
+          ),
+          telefono: String(item.telefono ?? ""),
+          tipo_direccion: String(item.tipo_direccion ?? ""),
+          fecha: fecha && !Number.isNaN(fecha.getTime())
+            ? fecha
+            : ""
+        });
+
+        fila.height = 25;
+
+        fila.eachCell({ includeEmpty: true }, celda => {
+          celda.font = {
+            name: "Arial",
+            size: 10,
+            color: { argb: TEXTO }
+          };
+
+          celda.alignment = {
+            vertical: "middle",
+            horizontal: "left",
+            shrinkToFit: true
+          };
+
+          if (index % 2 === 1) {
+            celda.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: ALTERNA }
+            };
+          }
+
+          celda.border = {
+            bottom: {
+              style: "hair",
+              color: { argb: BORDE }
+            }
+          };
+        });
+
+        // Identificaciones y teléfonos siempre como texto.
+        ["B", "E", "I"].forEach(col => {
+          fila.getCell(col).numFmt = "@";
+        });
+
+        // La fecha queda como fecha real de Excel.
+        const celdaFecha = fila.getCell("K");
+
+        if (celdaFecha.value instanceof Date) {
+          celdaFecha.numFmt = "dd/mm/yyyy hh:mm";
+        }
+
+        // Resaltar documentos que tengan dirección.
+        const direccion = String(item.direccion || "").trim();
+
+        if (direccion) {
+          fila.getCell("G").font = {
+            name: "Arial",
+            size: 10,
+            color: { argb: VERDE }
+          };
+        }
+
+        if (item.error_consulta_direccion) {
+          fila.getCell("G").font = {
+            name: "Arial",
+            size: 10,
+            color: { argb: ROJO }
+          };
+        }
+      });
+
+      // ==================================================
+      // FILTROS Y CONFIGURACIÓN DE IMPRESIÓN
+      // ==================================================
+
+      sheet.autoFilter = {
+        from: { row: 6, column: 1 },
+        to: { row: 6, column: 11 }
+      };
+
+      sheet.headerFooter.oddFooter =
+        "&L AutoCore - Centro de Operaciones Vehiculares &RPágina &P de &N";
+
+      sheet.pageMargins = {
+        left: 0.25,
+        right: 0.25,
+        top: 0.5,
+        bottom: 0.5,
+        header: 0.2,
+        footer: 0.2
+      };
+
+      // ==================================================
+      // DESCARGAR ARCHIVO
+      // ==================================================
+
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
+
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement("a");
+
+      enlace.href = url;
+      enlace.download = `AutoCore_Historial_Ubicabilidad_${fechaArchivo()}.xlsx`;
+
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      toast.success(
+        `Excel generado correctamente: ${historial.length.toLocaleString("es-CO")} registros`,
+        { id: idToast }
+      );
+    } catch (error) {
+      console.error("Error exportando historial:", error);
+      toast.error("No se pudo generar el Excel", { id: idToast });
+    }
   };
 
-  const estadoLabel = (row) => {
-    if (!row.direccion_consultada) return { label: "Pendiente", class: "bg-amber-100 text-amber-700" };
-    if (row.direccion_encontrada) return { label: "Encontrada", class: "bg-emerald-100 text-emerald-700" };
-    // Consultada sin dirección: si hay error de consulta es un Error propiamente
-    // dicho; si no, RUNT devolvió la persona pero sin dirección registrada.
-    if (row.error_consulta_direccion) return { label: "Error", class: "bg-red-100 text-red-700" };
-    return { label: "Sin dirección", class: "bg-slate-200 text-slate-700" };
+
+  // ====================================================
+  // ENVÍO A CONTRAVENCIONES
+  // ====================================================
+
+  const enviarRespuestas = async () => {
+    const destino = confirmEnvio;
+    setConfirmEnvio(null);
+    if (!destino || anioEnviando !== null) return;
+
+    try {
+      setAnioEnviando(destino.anio);
+      const resp = await enviarAnioExterno(destino.anio, destino.origen);
+
+      if (resp?.ok === false) throw new Error(resp.error || "Error de envío");
+
+      if (Number(resp.exitosas) || Number(resp.yaExistian)) {
+        toast.success(
+          `${numero(resp.exitosas)} enviadas, ${numero(resp.yaExistian)} ya existentes`,
+          { duration: 7000 }
+        );
+      }
+      if (Number(resp.fallidas)) {
+        toast.error(`${numero(resp.fallidas)} respuestas fallidas`);
+      }
+      if (Number(resp.noSoportadas)) {
+        toast(`${numero(resp.noSoportadas)} tipos no soportados`);
+      }
+      if (resp.mensaje) toast(resp.mensaje);
+
+      await refrescarApi();
+    } catch (err) {
+      toast.error(errorApi(err, "Error enviando a Contravenciones"));
+    } finally {
+      setAnioEnviando(null);
+    }
   };
 
-  // Estadísticas del año elegido para la devolución de resultados.
-  // El endpoint de envío actual trabaja por año, no con el filtro "Todos".
-  const anioActivoApi = aniosApi.find(
-    (item) => String(item.anio) === anioSeleccionadoApi
-  );
-
-  // Con "Todos" seleccionado el panel muestra los totales consolidados de todos
-  // los años; el envío sigue exigiendo un año concreto.
-  const totalesConsolidados = aniosApi.reduce(
-    (acc, item) => ({
-      conDireccion: acc.conDireccion + (Number(item.conDireccion) || 0),
-      enviadas: acc.enviadas + (Number(item.enviadas) || 0),
-      conError: acc.conError + (Number(item.conError) || 0),
-      porProcesar: acc.porProcesar + (Number(item.total) || 0)
-    }),
-    { conDireccion: 0, enviadas: 0, conError: 0, porProcesar: 0 }
-  );
-
-  const conDireccionApi = anioActivoApi
-    ? Number(anioActivoApi.conDireccion) || 0
-    : totalesConsolidados.conDireccion;
-  const enviadasApi = anioActivoApi
-    ? Number(anioActivoApi.enviadas) || 0
-    : totalesConsolidados.enviadas;
-  const conErrorApi = anioActivoApi
-    ? Number(anioActivoApi.conError) || 0
-    : totalesConsolidados.conError;
-  const porEnviarApi = Math.max(conDireccionApi - enviadasApi, 0);
-  const enviandoRespuestaApi = anioEnviandoApi !== null;
-
-  // Un año sale de la lista principal cuando no queda nada por procesar ni por
-  // enviar y no quedó ninguna respuesta rechazada. Si luego recibe trabajo
-  // nuevo, vuelve automáticamente a la sección principal.
-  const esCompletado = (item) =>
-    (Number(item.total) || 0) === 0 &&
-    (Number(item.conError) || 0) === 0 &&
-    (Number(item.enviadas) || 0) >= (Number(item.conDireccion) || 0);
-
-  const aniosActivosApi = aniosApi.filter((item) => !esCompletado(item));
-  const aniosCompletadosApi = aniosApi.filter(esCompletado);
-
-  const abrirErroresEnvio = async (anioForzado) => {
-    const anioCtx = anioForzado !== undefined ? anioForzado : anioSeleccionadoApi;
+  const abrirErrores = async (anio = anioApi) => {
     setErroresAbiertos(true);
     setErroresCargando(true);
-    setErroresError(null);
     setErroresLista([]);
+    setErroresError(null);
     setErroresContexto({
-      anio: anioCtx,
-      origen: origenSeleccionadoApi,
-      etiqueta: anioCtx === "" ? "Todos los años" : `Año ${etiquetaAnio(Number(anioCtx))}`
+      anio,
+      origen: origenApi,
+      etiqueta: anio === "" ? "Todos los años" : `Año ${anioTexto(anio)}`
     });
+
     try {
-      const resp = await obtenerErroresEnvio(anioCtx, origenSeleccionadoApi);
-      if (!resp.ok) throw new Error(resp.error || "No se pudo cargar el detalle");
+      const resp = await obtenerErroresEnvio(anio, origenApi);
+      if (resp?.ok === false) throw new Error(resp.error || "Error consultando errores");
       setErroresLista(resp.errores || []);
     } catch (err) {
-      setErroresError(
-        err.response?.data?.error || err.message || "Error cargando las respuestas con error"
-      );
+      setErroresError(errorApi(err, "Error cargando respuestas rechazadas"));
     } finally {
       setErroresCargando(false);
     }
   };
 
-  // Reintento desde el modal: abre el MISMO flujo de confirmación que el
-  // botón principal, así no se duplica la lógica de envío.
-  const reintentarDesdeErrores = () => {
-    const anioCtx = erroresContexto?.anio;
+  const reintentarErrores = () => {
+    const anio = erroresContexto.anio;
+    if (anio === "" || anio == null) return;
+
+    const item = aniosApi.find(a => String(a.anio) === String(anio));
+    const conDireccion = Number(item?.conDireccion || 0);
+    const enviadas = Number(item?.enviadas || 0);
+
     setErroresAbiertos(false);
-    if (anioCtx === "" || anioCtx === undefined || anioCtx === null) return;
-    const item = aniosApi.find((x) => String(x.anio) === String(anioCtx));
-    const conDireccion = Number(item?.conDireccion) || 0;
-    const enviadas = Number(item?.enviadas) || 0;
-    setConfirmEnvioAnioApi({
-      anio: item ? item.anio : Number(anioCtx),
+    setConfirmEnvio({
+      anio: item?.anio ?? Number(anio),
+      origen: erroresContexto.origen,
       conDireccion,
       enviadas,
       porEnviar: Math.max(conDireccion - enviadas, 0)
     });
   };
 
-  // Tarjeta de año compartida por la lista principal y por "Completados".
-  const tarjetaAnio = (item, completado = false) => {
-    const seleccionado = anioSeleccionadoApi === String(item.anio);
-    const total = Number(item.total) || 0;
-    const conDireccion = Number(item.conDireccion) || 0;
-    const enviadas = Number(item.enviadas) || 0;
-    const conError = Number(item.conError) || 0;
+  // ====================================================
+  // RESUMEN POR AÑOS
+  // ====================================================
 
-    const borde = seleccionado
-      ? "border-[#7C3AED] bg-[#F5EEFF] ring-2 ring-[#7C3AED]/20 shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]"
-      : completado
-        ? "border-emerald-200 bg-emerald-50/60 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm"
-        : "border-slate-200 bg-white hover:border-[#C4B5FD] hover:bg-[#F5EEFF]/40 hover:shadow-sm";
+  const totales = useMemo(() => aniosApi.reduce((acc, a) => ({
+    conDireccion: acc.conDireccion + Number(a.conDireccion || 0),
+    enviadas: acc.enviadas + Number(a.enviadas || 0),
+    conError: acc.conError + Number(a.conError || 0),
+    porProcesar: acc.porProcesar + Number(a.total || 0)
+  }), {
+    conDireccion: 0,
+    enviadas: 0,
+    conError: 0,
+    porProcesar: 0
+  }), [aniosApi]);
 
+  const anioActivo = aniosApi.find(a => String(a.anio) === anioApi);
+  const conDireccion = anioActivo
+    ? Number(anioActivo.conDireccion || 0) : totales.conDireccion;
+  const enviadas = anioActivo
+    ? Number(anioActivo.enviadas || 0) : totales.enviadas;
+  const conError = anioActivo
+    ? Number(anioActivo.conError || 0) : totales.conError;
+  const porEnviar = Math.max(conDireccion - enviadas, 0);
+
+  const completado = a =>
+    Number(a.total || 0) === 0 &&
+    Number(a.conError || 0) === 0 &&
+    Number(a.enviadas || 0) >= Number(a.conDireccion || 0);
+
+  const aniosActivos = aniosApi.filter(a => !completado(a));
+  const aniosCompletados = aniosApi.filter(completado);
+
+  const tarjetaAnio = (a, terminado = false) => {
+    const seleccionado = anioApi === String(a.anio);
     return (
-      <button
-        key={item.anio}
-        type="button"
-        onClick={() => cambiarAnioApi(String(item.anio))}
-        disabled={cargandoPendientesApi}
-        aria-pressed={seleccionado}
-        className={`relative flex min-h-[108px] flex-col justify-center gap-1 rounded-xl border-2 p-3.5 text-left transition-all disabled:opacity-60 ${borde}`}
-      >
-        {seleccionado && <Check className="absolute right-3 top-3 h-4 w-4 text-runt-primary-dark" />}
-        <span className="flex items-center gap-2">
-          {completado ? (
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-          ) : (
-            <CalendarDays className="h-5 w-5 shrink-0 text-[#7C3AED]" />
-          )}
-          <span className="text-base font-bold text-slate-900">{etiquetaAnio(item.anio)}</span>
-        </span>
-        <span className="text-xs text-slate-500">{total} por procesar</span>
-        <span className="mt-1 flex flex-wrap items-center gap-1.5">
-          {completado && (
-            <span className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-              Completado
-            </span>
-          )}
-          {conDireccion > 0 && (
-            <span className="rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">
-              {enviadas}/{conDireccion} enviadas
-            </span>
-          )}
-          {conError > 0 && (
-            <span className="rounded-md bg-red-100 px-2 py-1 text-[10px] font-bold text-red-700">
-              {conError} con error
-            </span>
-          )}
-        </span>
+      <button key={a.anio} type="button" disabled={cargandoApi}
+        onClick={() => cambiarAnio(String(a.anio))}
+        className={`relative rounded-xl border p-3 text-left transition-colors ${seleccionado ? "border-[#00ABE4] bg-sky-50 ring-2 ring-sky-100" :
+            terminado ? "border-emerald-200 bg-emerald-50/50" :
+              "border-slate-200 bg-white hover:border-sky-300"
+          }`}>
+        {seleccionado && <Check size={15} className="absolute right-3 top-3 text-[#0095C5]" />}
+        <div className="flex items-center gap-2">
+          {terminado
+            ? <CheckCircle2 size={17} className="text-emerald-600" />
+            : <CalendarDays size={17} className="text-[#0095C5]" />}
+          <strong className="text-sm text-slate-900">{anioTexto(a.anio)}</strong>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          {numero(a.total)} por procesar
+        </p>
+        <p className="mt-1 text-[11px] text-emerald-700">
+          {numero(a.enviadas)}/{numero(a.conDireccion)} enviadas
+        </p>
+        {Number(a.conError || 0) > 0 && (
+          <p className="mt-1 text-[11px] text-red-600">
+            {numero(a.conError)} con error
+          </p>
+        )}
       </button>
     );
   };
 
-  return (
-    <div className="space-y-5">
-      <PageHeroHeader
-        label="Ubicabilidad Personas"
-        labelIcon={MapPin}
-        title="Ubicabilidad Personas"
-        description="Cargue documentos desde Excel o CSV para ejecutar el proceso de consulta y ubicación de direcciones."
-        icon={MapPin}
-      />
+  // ====================================================
+  // VISTA
+  // ====================================================
 
-      {/* ── Documentos pendientes: BD (fotodetección/Excel) vs Servicios API ── */}
-      {!mostrarPendientes && !mostrarPendientesApi && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
+  return (
+    <div className="space-y-4">
+
+      {/* ENCABEZADO */}
+
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#00ABE4] to-[#0095C5] px-6 py-5 text-white shadow-lg md:px-8">
+        <PlugZap size={110}
+          className="pointer-events-none absolute right-6 top-1/2 hidden -translate-y-1/2 opacity-15 md:block" />
+        <div className="relative z-10">
+          <p className="flex items-center gap-2 text-xs font-semibold text-sky-100">
+            <MapPin size={15} /> INTEGRACIONES
+          </p>
+          <h1 className="mt-2 text-2xl font-bold md:text-3xl">
+            Ubicabilidad de personas
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-sky-50">
+            Importación de documentos, consultas RUNT por lotes
+            e integración con Contravenciones.
+          </p>
+        </div>
+      </section>
+
+      {/* INDICADORES */}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Indicador titulo="Solicitudes API" valor={numero(totalApi)}
+          icono={PlugZap} />
+        <Indicador titulo="En cola API" valor={numero(totalEnColaApi)}
+          icono={Clock3} color="amber" />
+        <Indicador titulo="Trabajos monitoreados" valor={numero(jobs.length)}
+          icono={CheckCircle2} color="green" />
+      </div>
+
+      {/* FUENTES DE PROCESAMIENTO */}
+
+      <section className={`${CARD} p-4 md:p-5`}>
+        <Titulo icono={Layers3} titulo="Fuentes de procesamiento"
+          descripcion="Seleccione documentos pendientes de Excel o solicitudes de integraciones API." />
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-                <Database size={20} className="text-amber-600" />
+              <div className="rounded-xl bg-white p-2.5 text-[#0095C5]">
+                <Database size={20} />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-[#1e293b]">Documentos pendientes</h3>
-                <p className="text-xs text-[#64748b]">Dos fuentes independientes: base de datos y servicios API</p>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Pendientes de Excel
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Documentos previamente importados en la base de datos.
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 md:ml-auto">
-              <button
-                onClick={() => cargarPersonasPendientes(limitPendientes)}
-                disabled
-                title="Desactivado: Ubicabilidad Personas trabaja solo con solicitudes API"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#d97706" }}
-              >
-                {cargandoPendientes ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Cargando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Database size={16} />
-                    <span>Documentos pendientes</span>
-                  </>
-                )}
-              </button>
+            <p className="mt-3 text-xs leading-relaxed text-slate-600">
+              Consulta los documentos pendientes y prepara lotes
+              de máximo {POR_JOB} por tipo de identificación.
+            </p>
 
-              <button
-                onClick={handleLimpiarDocumentos}
-                disabled
-                title="Desactivado: Ubicabilidad Personas trabaja solo con solicitudes API"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{ backgroundColor: "#dc2626" }}
-              >
-                <Trash2 size={16} />
-                <span>Limpiar lista</span>
-              </button>
+            <button type="button"
+              disabled={cargandoExcelBD || ocupado}
+              onClick={() => mostrarExcelBD
+                ? (setMostrarExcelBD(false), setGrupoExcel(null), setDocumentosExcel(""))
+                : cargarPendientesExcel()}
+              className={`${PRIMARY} mt-4 w-full sm:w-auto`}>
+              {cargandoExcelBD
+                ? <Loader2 size={16} className="animate-spin" />
+                : mostrarExcelBD ? <X size={16} /> : <Database size={16} />}
+              {cargandoExcelBD ? "Consultando..." :
+                mostrarExcelBD ? "Ocultar pendientes" : "Cargar pendientes de Excel"}
+            </button>
+          </div>
 
-              <div className="hidden md:block w-px h-8 bg-slate-200" />
-
-              <button
-                onClick={() => cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi)}
-                disabled={cargandoPendientesApi}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
-                style={{ backgroundColor: "#7c3aed" }}
-              >
-                {cargandoPendientesApi ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Cargando...</span>
-                  </>
-                ) : (
-                  <>
-                    <PlugZap size={16} />
-                    <span>Solicitudes recibidas</span>
-                  </>
-                )}
-              </button>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-sky-50 p-2.5 text-[#0095C5]">
+                <PlugZap size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Solicitudes API
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Integraciones externas de Contravenciones.
+                </p>
+              </div>
             </div>
+
+            <p className="mt-3 text-xs leading-relaxed text-slate-600">
+              Filtra por año, origen y tipo documental.
+              Consulta y procesa solicitudes de servicios externos.
+            </p>
+
+            <button type="button" disabled={cargandoApi || ocupado}
+              onClick={() => mostrarApi
+                ? (setMostrarApi(false), setGrupoApi(null), setDocumentosApi(""))
+                : cargarApi()}
+              className={`${OUTLINE} mt-4 w-full sm:w-auto`}>
+              {cargandoApi
+                ? <Loader2 size={16} className="animate-spin" />
+                : mostrarApi ? <X size={16} /> : <PlugZap size={16} />}
+              {cargandoApi ? "Consultando..." :
+                mostrarApi ? "Ocultar solicitudes" : "Ver solicitudes API"}
+            </button>
           </div>
         </div>
-      )}
+      </section>
 
-      {/* ── Panel de solicitudes API pendientes — diseño AutoCore ── */}
-      {mostrarPendientesApi && (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card animate-fade-in">
-          {/* Cabecera */}
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between md:px-6">
-            <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-runt-light">
-                <Database className="h-6 w-6 text-runt-primary" />
-              </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-bold text-slate-900">Solicitudes API pendientes</h2>
-                  <span className="rounded-full bg-[#7C3AED] px-3 py-0.5 text-xs font-bold text-white shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]">{totalApi}</span>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                  <span><strong className="text-slate-700">{totalEnColaApi}</strong> en cola</span>
-                  <span><strong className="text-slate-700">{Math.max(totalApi - totalEnColaApi, 0)}</strong> por procesar</span>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1">Lotes de {POR_JOB}</span>
-                </div>
+      {/* PENDIENTES DE EXCEL */}
+
+      {mostrarExcelBD && (
+        <section className={`${CARD} p-4 md:p-5`}>
+          <Titulo icono={Database}
+            titulo="Documentos pendientes de Excel"
+            descripcion={`${numero(totalExcel)} documentos pendientes según la consulta a BD`}
+            derecha={
+              <button type="button" className={OUTLINE}
+                disabled={cargandoExcelBD || ocupado}
+                onClick={cargarPendientesExcel}>
+                <RefreshCw size={15}
+                  className={cargandoExcelBD ? "animate-spin" : ""} />
+                Actualizar
+              </button>
+            }
+          />
+
+          {gruposExcel.length === 0 ? (
+            <div className="mt-4">
+              <Vacio icono={CheckCircle2}
+                mensaje="No se encontraron documentos pendientes de Excel." />
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              {gruposExcel.map(g => {
+                const seleccionado = grupoExcel?.tipoDocumento === g.tipoDocumento;
+                return (
+                  <button key={g.tipoDocumento} type="button"
+                    disabled={ocupado || !g.documentos.length}
+                    onClick={() => seleccionarGrupoExcel(g)}
+                    className={`flex items-center justify-between gap-3 rounded-xl border p-4 text-left ${seleccionado
+                        ? "border-[#00ABE4] bg-sky-50 ring-2 ring-sky-100"
+                        : "border-slate-200 bg-white hover:border-sky-300"
+                      }`}>
+                    <div className="flex items-center gap-3">
+                      <IdCard size={21} className="text-[#0095C5]" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">
+                          {g.tipoDocumento}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {numero(g.total)} pendientes · {g.documentos.length} disponibles en el lote
+                        </p>
+                      </div>
+                    </div>
+                    <span className="rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-[#0095C5]">
+                      {seleccionado ? "Seleccionado" : "Cargar"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {grupoExcel && (
+            <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
+              <Titulo icono={ClipboardList}
+                titulo="Lote Excel listo para procesar"
+                descripcion={`Tipo documental: ${grupoExcel.tipoDocumento}`}
+                derecha={
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#0095C5]">
+                    {separarDocs(documentosExcel).length}/{POR_JOB}
+                  </span>
+                }
+              />
+
+              <textarea rows={5} value={documentosExcel}
+                disabled={ocupado}
+                onChange={e => setDocumentosExcel(e.target.value)}
+                className="mt-4 w-full resize-y rounded-xl border border-slate-200 p-3 font-mono text-xs outline-none focus:border-[#00ABE4]" />
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className={GREEN}
+                  disabled={ocupado || !documentosExcel.trim()}
+                  onClick={() => crearTrabajo("excel")}>
+                  {procesando
+                    ? <Loader2 size={15} className="animate-spin" />
+                    : <CheckCircle2 size={15} />}
+                  Crear lote de hasta 90
+                </button>
+                <button type="button" className={OUTLINE}
+                  disabled={ocupado}
+                  onClick={() => {
+                    setGrupoExcel(null);
+                    setDocumentosExcel("");
+                  }}>
+                  <X size={15} /> Cancelar
+                </button>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-              <button type="button"
-                onClick={() => cargarSolicitudesApi(origenSeleccionadoApi, anioSeleccionadoApi)}
-                disabled={cargandoPendientesApi}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50">
-                <RefreshCw className={`h-4 w-4 ${cargandoPendientesApi ? "animate-spin" : ""}`} /> Actualizar
+          )}
+        </section>
+      )}
+
+      {/* SOLICITUDES API */}
+
+      {mostrarApi && (
+        <section className={`${CARD} overflow-hidden`}>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4 md:p-5">
+            <Titulo icono={PlugZap}
+              titulo="Solicitudes API pendientes"
+              descripcion={`${numero(totalApi)} solicitudes · ${numero(totalEnColaApi)} en cola`}
+            />
+            <div className="flex gap-2">
+              <button type="button" className={OUTLINE}
+                disabled={cargandoApi}
+                onClick={() => cargarApi()}>
+                <RefreshCw size={15}
+                  className={cargandoApi ? "animate-spin" : ""} />
+                Actualizar
               </button>
-              <button type="button" onClick={() => {
-                setMostrarPendientesApi(false);
-                setDocumentosApi("");
-                setTipoDocumentoApi("");
-                setOrigenCargadoApi("");
-                setAnioCargadoApi(null);
-                setGrupoCargadoApi(null);
-              }} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                <X className="h-4 w-4" /> Cerrar
+              <button type="button" className={OUTLINE}
+                onClick={() => setMostrarApi(false)}>
+                <X size={15} /> Cerrar
               </button>
             </div>
           </div>
 
-          <div className="space-y-4 p-4 md:p-6">
-            {/* Paso 1: Año de los comparendos */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-              <div className="mb-4 flex items-start gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-runt-light text-sm font-bold text-runt-primary-dark">1</span>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Selecciona el año a consultar</h3>
-                  <p className="mt-1 text-xs text-slate-500">Año de los comparendos que motivan la solicitud.</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-                <button type="button" onClick={() => cambiarAnioApi("")}
-                  disabled={cargandoPendientesApi} aria-pressed={anioSeleccionadoApi === ""}
-                  className={`relative flex min-h-[108px] flex-col justify-center rounded-xl border-2 p-3.5 text-left transition-all disabled:opacity-60 ${anioSeleccionadoApi === "" ? "border-[#7C3AED] bg-[#F5EEFF] ring-2 ring-[#7C3AED]/20 shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]" : "border-slate-200 bg-white hover:border-[#C4B5FD] hover:bg-[#F5EEFF]/40 hover:shadow-sm"}`}>
-                  {anioSeleccionadoApi === "" && <Check className="absolute right-3 top-3 h-4 w-4 text-runt-primary-dark" />}
-                  <Layers3 className="mb-2 h-5 w-5 text-[#7C3AED]" />
-                  <span className="text-sm font-bold text-slate-900">Todos</span>
-                  <span className="mt-1 text-xs text-slate-500">{totalesConsolidados.porProcesar} por procesar</span>
-                  {totalesConsolidados.conError > 0 && (
-                    <span className="mt-1 self-start rounded-md bg-red-100 px-2 py-1 text-[10px] font-bold text-red-700">
-                      {totalesConsolidados.conError} con error
-                    </span>
-                  )}
+          <div className="space-y-4 p-4 md:p-5">
+
+            {/* AÑOS */}
+
+            <Paso n="1" titulo="Año del comparendo"
+              descripcion="Seleccione el año para filtrar las solicitudes.">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                <button type="button" disabled={cargandoApi}
+                  onClick={() => cambiarAnio("")}
+                  className={`rounded-xl border p-3 text-left ${anioApi === "" ? "border-[#00ABE4] bg-sky-50" :
+                      "border-slate-200 bg-white"
+                    }`}>
+                  <Layers3 size={18} className="text-[#0095C5]" />
+                  <p className="mt-2 text-sm font-bold">Todos</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {numero(totales.porProcesar)} pendientes
+                  </p>
                 </button>
-                {aniosActivosApi.map((item) => tarjetaAnio(item, false))}
+                {aniosActivos.map(a => tarjetaAnio(a))}
               </div>
 
-              {/* Años terminados: procesados y con todas las respuestas enviadas.
-                  Sigue siendo posible seleccionarlos para reenviar. */}
-              {aniosCompletadosApi.length > 0 && (
-                <div className="mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setMostrarCompletados((v) => !v)}
-                    aria-expanded={mostrarCompletados}
-                    className="flex w-full items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-left transition-colors hover:bg-emerald-50"
-                  >
-                    <ChevronDown
-                      className={`h-4 w-4 shrink-0 text-emerald-600 transition-transform ${mostrarCompletados ? "rotate-180" : ""}`}
-                    />
-                    <span className="text-sm font-bold text-emerald-800">
-                      Completados ({aniosCompletadosApi.length})
-                    </span>
-                    <span className="ml-auto rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
-                      {aniosCompletadosApi.reduce((t, i) => t + (Number(i.enviadas) || 0), 0)}/
-                      {aniosCompletadosApi.reduce((t, i) => t + (Number(i.conDireccion) || 0), 0)} enviadas
-                    </span>
+              {aniosCompletados.length > 0 && (
+                <div className="mt-3">
+                  <button type="button"
+                    onClick={() => setMostrarCompletados(v => !v)}
+                    className="flex w-full items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700">
+                    <ChevronDown size={15}
+                      className={mostrarCompletados ? "rotate-180" : ""} />
+                    Completados ({aniosCompletados.length})
                   </button>
                   {mostrarCompletados && (
-                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-                      {aniosCompletadosApi.map((item) => tarjetaAnio(item, true))}
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                      {aniosCompletados.map(a => tarjetaAnio(a, true))}
                     </div>
                   )}
                 </div>
               )}
-              {aniosApi.length === 0 && (
-                <p className="mt-3 text-xs text-amber-700">No hay años registrados. Verifica que el servicio devuelve los años.</p>
-              )}
-              {aniosApi.some((item) => item.anio === 0) && (
-                <p className="mt-3 text-xs text-slate-500">«Sin año» representa solicitudes sin año de comparendo identificado.</p>
-              )}
-            </div>
+            </Paso>
 
-            {/* Paso 2: Origen y envío, claramente separados */}
+            {/* ORIGEN Y ENVÍO */}
+
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 xl:col-span-3">
-                <div className="mb-4 flex items-start gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-runt-light text-sm font-bold text-runt-primary-dark">2</span>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Servicio que envió la solicitud</h3>
-                    <p className="mt-1 text-xs text-slate-500">Filtra las solicitudes por el servicio de origen.</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => cambiarOrigenApi("")}
-                    disabled={cargandoPendientesApi}
-                    className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold disabled:opacity-60 ${origenSeleccionadoApi === "" ? "border-[#7C3AED] bg-[#F5EEFF] text-[#6D28D9]" : "border-slate-200 bg-white text-slate-600 hover:border-[#7C3AED]"}`}>
-                    <LayoutGrid className="h-4 w-4" /> Todos
-                    {origenSeleccionadoApi === "" && <Check className="h-4 w-4" />}
-                  </button>
-                  {origenesApi.map((origen) => (
-                    <button key={origen.origen} type="button"
-                      onClick={() => cambiarOrigenApi(origen.origen)}
-                      disabled={cargandoPendientesApi}
-                      className={`flex max-w-full items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold disabled:opacity-60 ${origenSeleccionadoApi === origen.origen ? "border-[#7C3AED] bg-[#F5EEFF] text-[#6D28D9]" : "border-slate-200 bg-white text-slate-600 hover:border-[#7C3AED]"}`}>
-                      <PlugZap className="h-4 w-4 shrink-0" />
-                      <span className="break-all">{origen.origen}</span>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-600">{origen.total}</span>
+              <div className="xl:col-span-3">
+                <Paso n="2" titulo="Servicio de origen"
+                  descripcion="Filtre según la integración externa.">
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" disabled={cargandoApi}
+                      onClick={() => cambiarOrigen("")}
+                      className={`${BTN} ${origenApi === ""
+                        ? "bg-[#00ABE4] text-white"
+                        : "border border-slate-200 bg-white text-slate-600"}`}>
+                      Todos
                     </button>
-                  ))}
-                </div>
+
+                    {origenesApi.map(o => (
+                      <button type="button" key={o.origen}
+                        disabled={cargandoApi}
+                        onClick={() => cambiarOrigen(o.origen)}
+                        className={`${BTN} ${origenApi === o.origen
+                            ? "bg-[#00ABE4] text-white"
+                            : "border border-slate-200 bg-white text-slate-600"
+                          }`}>
+                        <PlugZap size={14} />
+                        {o.origen}
+                        <span className="text-[10px]">{numero(o.total)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Paso>
               </div>
 
-              {/* Panel de respuestas, NO está dentro de las tarjetas de año */}
-              <div className="flex flex-col justify-between rounded-2xl border border-[#C4B5FD] bg-gradient-to-br from-[#F5EEFF] via-white to-runt-light p-4 shadow-sm xl:col-span-2">
-                <div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm">
-                      <Send className="h-4 w-4 text-[#7C3AED]" />
-                    </span>
-                    <h3 className="text-sm font-bold text-slate-900">Respuestas a Contravenciones</h3>
-                  </div>
-                  <p className="text-xs leading-relaxed text-slate-500">Envía los resultados de ubicabilidad al servicio que realizó la solicitud.</p>
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  <div className="rounded-xl bg-white p-2.5 shadow-sm">
-                    <p className="text-lg font-bold text-slate-900">{porEnviarApi}</p>
-                    <p className="mt-1 text-[10px] leading-tight text-slate-500">Por enviar</p>
-                  </div>
-                  <div className="rounded-xl bg-white p-2.5 shadow-sm">
-                    <p className="text-lg font-bold text-emerald-600">{enviadasApi}</p>
-                    <p className="mt-1 text-[10px] leading-tight text-slate-500">Enviadas</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => abrirErroresEnvio()}
-                    disabled={cargandoPendientesApi}
-                    title="Ver el detalle de las respuestas rechazadas por Contravenciones"
-                    className="rounded-xl bg-white p-2.5 text-left shadow-sm transition-all hover:ring-2 hover:ring-red-300 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <p className={`text-lg font-bold ${conErrorApi > 0 ? "text-red-600" : "text-slate-400"}`}>
-                      {conErrorApi}
-                    </p>
-                    <p className="mt-1 flex items-center gap-1 text-[10px] leading-tight text-slate-500">
-                      <AlertTriangle className="h-3 w-3 shrink-0 text-red-500" />
-                      Con error
-                    </p>
-                  </button>
-                </div>
-                <button type="button"
-                  disabled={!anioActivoApi || enviandoRespuestaApi || cargandoPendientesApi || porEnviarApi === 0}
-                  onClick={() => {
-                    if (!anioActivoApi) return;
-                    setConfirmEnvioAnioApi({ anio: anioActivoApi.anio, conDireccion: conDireccionApi, enviadas: enviadasApi, porEnviar: porEnviarApi });
-                  }}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-4 py-3 text-sm font-bold text-white shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)] transition-colors hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none">
-                  {enviandoRespuestaApi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {enviandoRespuestaApi ? "Enviando respuestas..." : "Enviar a Contravenciones"}
-                </button>
-                <p className="mt-2 text-center text-[11px] text-slate-500">
-                  {!anioActivoApi
-                    ? `Totales de los ${aniosApi.length} año(s). Selecciona un año: el envío es por año.`
-                    : porEnviarApi === 0
-                      ? "No hay nuevas respuestas para enviar."
-                      : `Año ${etiquetaAnio(anioActivoApi.anio)} · ${porEnviarApi} pendientes de envío`}
-                </p>
-                {conErrorApi > 0 && (
-                  <p className="mt-1 text-center text-[11px] font-semibold text-red-600">
-                    {conErrorApi} rechazada(s) por Contravenciones · pulsa «Con error»
+              <div className="xl:col-span-2">
+                <div className="h-full rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <Send size={17} className="text-[#0095C5]" />
+                    Respuestas a Contravenciones
+                  </h3>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Enviar las direcciones consultadas por año.
                   </p>
-                )}
+
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {[
+                      ["Por enviar", porEnviar, "text-slate-900"],
+                      ["Enviadas", enviadas, "text-emerald-600"],
+                      ["Con error", conError, "text-red-600"]
+                    ].map(([label, valor, color], i) => (
+                      <button key={label} type="button"
+                        disabled={i !== 2}
+                        onClick={() => abrirErrores()}
+                        className="rounded-lg bg-white p-3 text-left disabled:cursor-default">
+                        <p className={`text-lg font-bold ${color}`}>{numero(valor)}</p>
+                        <p className="text-[10px] text-slate-500">{label}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <button type="button" className={`${PRIMARY} mt-4 w-full`}
+                    disabled={!anioActivo || anioEnviando !== null ||
+                      cargandoApi || porEnviar === 0}
+                    onClick={() => setConfirmEnvio({
+                      anio: anioActivo.anio,
+                      origen: origenApi,
+                      conDireccion, enviadas, porEnviar
+                    })}>
+                    {anioEnviando !== null
+                      ? <Loader2 size={15} className="animate-spin" />
+                      : <Send size={15} />}
+                    Enviar a Contravenciones
+                  </button>
+                  <p className="mt-2 text-center text-[11px] text-slate-500">
+                    {anioActivo ? `Año ${anioTexto(anioActivo.anio)}` :
+                      "Seleccione un año para habilitar el envío"}
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Paso 3: Tipos de documento */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-              <div className="mb-4 flex items-start gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-runt-light text-sm font-bold text-runt-primary-dark">3</span>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Tipo de documento</h3>
-                  <p className="mt-1 text-xs text-slate-500">Selecciona el grupo de documentos que deseas procesar.</p>
-                </div>
-              </div>
-              {gruposApi.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
-                  <FileText className="mx-auto mb-2 h-7 w-7 text-slate-300" />
-                  <p className="text-sm text-slate-500">No hay grupos con los filtros actuales.</p>
-                </div>
+            {/* GRUPOS API */}
+
+            <Paso n="3" titulo="Grupos de documentos"
+              descripcion="Seleccione un grupo para preparar hasta 90 documentos.">
+              {!gruposApi.length ? (
+                <Vacio icono={IdCard}
+                  mensaje="No hay grupos para los filtros seleccionados." />
               ) : (
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  {gruposApi.map((grupo) => {
-                    const seleccionado = grupoCargadoApi &&
-                      grupoCargadoApi.origen === grupo.origen &&
-                      grupoCargadoApi.anio === grupo.anio &&
-                      grupoCargadoApi.tipoDocumento === grupo.tipoDocumento;
-                    const sinTrabajo = grupo.porProcesar === 0;
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {gruposApi.map(g => {
+                    const activo = grupoApi &&
+                      grupoApi.origen === g.origen &&
+                      grupoApi.anio === g.anio &&
+                      grupoApi.tipoDocumento === g.tipoDocumento;
+
                     return (
-                      <button key={`${grupo.origen}-${grupo.anio}-${grupo.tipoDocumento}`}
-                        type="button" onClick={() => seleccionarGrupoApi(grupo)} disabled={sinTrabajo}
-                        className={`group flex min-w-0 items-center justify-between gap-3 rounded-xl border-2 p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${seleccionado ? "border-[#7C3AED] bg-[#F5EEFF] ring-2 ring-[#7C3AED]/20 shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]" : "border-slate-200 bg-white hover:border-[#C4B5FD] hover:bg-[#F5EEFF]/40 hover:shadow-sm"}`}>
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-runt-light">
-                            <IdCard className="h-6 w-6 text-runt-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="break-all text-[10px] font-bold uppercase tracking-wide text-runt-primary-dark">
-                              {grupo.origen}{grupo.anio != null ? ` · ${etiquetaAnio(grupo.anio)}` : ""}
+                      <button type="button"
+                        key={`${g.origen}-${g.anio}-${g.tipoDocumento}`}
+                        disabled={ocupado || g.porProcesar <= 0}
+                        onClick={() => seleccionarGrupoApi(g)}
+                        className={`flex items-center justify-between gap-3 rounded-xl border p-3 text-left ${activo ? "border-[#00ABE4] bg-sky-50" :
+                            "border-slate-200 bg-white hover:border-sky-300"
+                          }`}>
+                        <div className="flex items-center gap-3">
+                          <IdCard size={21} className="text-[#0095C5]" />
+                          <div>
+                            <p className="text-[10px] font-semibold text-slate-500">
+                              {g.origen} · {anioTexto(g.anio)}
                             </p>
-                            <h4 className="mt-1 text-sm font-bold text-slate-900">{grupo.tipoDocumento}</h4>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {sinTrabajo ? (
-                                <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">Todo en cola</span>
-                              ) : (
-                                <>
-                                  <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700">{grupo.porProcesar} por procesar</span>
-                                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">{grupo.enCola} en cola</span>
-                                </>
-                              )}
-                            </div>
+                            <p className="mt-1 text-sm font-bold text-slate-900">
+                              {g.tipoDocumento}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {numero(g.porProcesar)} disponibles · {numero(g.enCola)} en cola
+                            </p>
                           </div>
                         </div>
-                        <span className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold ${sinTrabajo ? "bg-slate-100 text-slate-400" : "bg-[#F5EEFF] text-[#6D28D9] group-hover:bg-[#7C3AED] group-hover:text-white"}`}>
-                          <Upload className="h-4 w-4" /> Cargar
-                        </span>
+                        <Upload size={17} className="text-[#0095C5]" />
                       </button>
                     );
                   })}
                 </div>
               )}
-              <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <button type="button" onClick={() => setConfirmLimpiarApiOpen(true)}
-                  className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100">
-                  <Trash2 className="h-4 w-4" /> Limpiar solicitudes API
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                <p className="text-xs text-slate-500">
+                  Máximo {POR_JOB} documentos por trabajo.
+                </p>
+                <button type="button" disabled
+                  title="Función deshabilitada"
+                  className={`${BTN} cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 opacity-60`}>
+                  <Trash2 size={14} /> Limpiar solicitudes API
                 </button>
-                <div className="flex items-start gap-2 text-xs leading-relaxed text-slate-500">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-runt-primary" />
-                  <span>Solo se procesan {POR_JOB} documentos por trabajo. Al crear el lote, los contadores se actualizan automáticamente.</span>
-                </div>
               </div>
-            </div>
+            </Paso>
           </div>
         </section>
       )}
 
-      {/* ── Panel de personas pendientes ── */}
-      {mostrarPendientes && personasPendientes.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-semibold text-[#1e293b]">
-                Personas pendientes ({personasPendientes.length})
-              </h3>
-              <p className="text-xs text-[#64748b] mt-1">
-                Selecciona un grupo para cargarlo en el formulario
-              </p>
-            </div>
-            <button
-              onClick={() => { setMostrarPendientes(false); setDocumentosCargados(""); }}
-              className="text-xs text-[#64748b] hover:text-[#1e293b]"
-            >
-              Cerrar
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {gruposPendientes.map((grupo) => (
-              <button
-                key={grupo.tipoDocumento}
-                onClick={() => cargarGrupoEnTextarea(grupo)}
-                className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-[#00ABE4] hover:bg-blue-50/50 transition-colors text-left"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-[#1e293b]">{grupo.tipoDocumento}</p>
-                  <p className="text-xs text-[#64748b]">{grupo.count} documento(s)</p>
-                </div>
-                <Upload className="w-4 h-4 text-[#00ABE4]" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* LOTE API SELECCIONADO */}
 
-      {/* ── Tarjeta de carga ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Upload className="w-5 h-5 text-[#00ABE4]" />
-          <h3 className="text-sm font-semibold text-[#1e293b]">Cargar archivo</h3>
-        </div>
-
-        <div className="flex flex-col md:flex-row md:items-end gap-3">
-          <div className="flex-1">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full md:w-auto flex items-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 rounded-xl text-sm text-[#64748b] hover:border-[#00ABE4] hover:text-[#00ABE4] transition-colors"
-            >
-              <FileText className="w-4 h-4" />
-              {archivo ? archivo.name : "Seleccionar archivo"}
-            </button>
-            <p className="text-xs text-[#94a3b8] mt-1.5">
-              Formatos: .xlsx, .xls, .csv — Columnas requeridas: <strong>tipo_documento</strong>, <strong>documento</strong>
-            </p>
-          </div>
-
-          <button
-            onClick={handleValidar}
-            disabled={!archivo || validando}
-            className="flex items-center gap-2 px-5 py-3 bg-[#00ABE4] hover:bg-[#0095C5] text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-          >
-            {validando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            {validando ? "Validando..." : "Validar documentos"}
-          </button>
-
-          <button
-            onClick={handleIniciarScraping}
-            disabled={!resultadoValidacion || resultadoValidacion.registros_validos === 0 || procesando}
-            className="flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-          >
-            {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            {procesando ? "Creando trabajo..." : "Iniciar Busqueda"}
-          </button>
-
-          {resultadoValidacion && (
-            <button
-              onClick={handleLimpiar}
-              className="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-[#64748b] rounded-xl text-sm font-semibold transition-colors"
-            >
-              <X className="w-4 h-4" />
-              Cancelar
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Formulario documentos desde BD ── */}
-      {documentosCargados && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Database className="w-5 h-5 text-[#d97706]" />
-            <h3 className="text-sm font-semibold text-[#1e293b]">
-              Documentos desde BD — {tipoDocumentoSeleccionado}
-            </h3>
-          </div>
-          <textarea
-            value={documentosCargados}
-            onChange={(e) => setDocumentosCargados(e.target.value)}
-            rows={6}
-            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono focus:outline-none focus:border-[#00ABE4] resize-none"
-            placeholder="Uno por línea, separados por coma o espacio"
-          />
-          <p className="text-xs text-[#64748b] mt-2">
-            {documentosCargados.split(/[\n,;]+/).filter(d => d.trim()).length} documento(s) cargado(s)
-          </p>
-          <div className="flex items-center gap-3 mt-4">
-            <button
-              onClick={handleCrearJobDesdeBD}
-              disabled={procesando || !documentosCargados.trim()}
-              className="flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              {procesando ? "Creando trabajo..." : "Crear lote"}
-            </button>
-            <button
-              onClick={() => { setDocumentosCargados(""); setMostrarPendientes(false); }}
-              className="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-[#64748b] rounded-xl text-sm font-semibold transition-colors"
-            >
-              <X className="w-4 h-4" />
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Formulario documentos desde Servicios API ── */}
-      {documentosApi && (
-        <div className="bg-white rounded-2xl border-2 border-[#7c3aed] shadow-lg p-5 md:p-6">
-          <div className="flex items-center justify-between gap-3 mb-4 p-3 rounded-xl bg-[#7c3aed] text-white">
-            <div className="flex items-center gap-2 min-w-0">
-              <PlugZap className="w-5 h-5 shrink-0" />
-              <h3 className="text-sm font-bold truncate">
-                Lote listo — {origenCargadoApi || "varios orígenes"}
-                {anioCargadoApi != null ? ` · ${anioCargadoApi === 0 ? "sin año" : anioCargadoApi}` : ""}
-                {tipoDocumentoApi ? ` · ${tipoDocumentoApi}` : ""}
-              </h3>
-            </div>
-            {grupoCargadoApi?.porProcesar ? (
-              <span className="shrink-0 px-2.5 py-1 rounded-lg bg-white/20 text-xs font-bold">
-                {Math.min(POR_JOB, grupoCargadoApi.porProcesar)} de {grupoCargadoApi.porProcesar}
+      {grupoApi && (
+        <section className={`${CARD} border-sky-300 p-4 md:p-5`}>
+          <Titulo icono={ClipboardList}
+            titulo="Lote API listo para procesar"
+            descripcion={`${grupoApi.origen} · ${anioTexto(grupoApi.anio)} · ${grupoApi.tipoDocumento}`}
+            derecha={
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-[#0095C5]">
+                {separarDocs(documentosApi).length}/{POR_JOB}
               </span>
-            ) : null}
-          </div>
-          <textarea
-            value={documentosApi}
-            onChange={(e) => setDocumentosApi(e.target.value)}
-            rows={6}
-            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-mono focus:outline-none focus:border-[#7c3aed] resize-none"
-            placeholder="Uno por línea, separados por coma o espacio"
+            }
           />
-          <p className="text-xs text-[#64748b] mt-2">
-            {documentosApi.split(/[\n,;]+/).filter(d => d.trim()).length} documento(s) cargado(s)
-          </p>
-          <div className="flex items-center gap-3 mt-4">
-            <button
-              onClick={handleCrearJobDesdeApi}
-              disabled={procesando || !documentosApi.trim()}
-              className="flex items-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-base font-bold shadow-md transition-colors disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed"
-            >
-              {procesando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-              {procesando ? "Creando trabajo..." : "Crear lote"}
+
+          <textarea rows={5} value={documentosApi}
+            disabled={ocupado}
+            onChange={e => setDocumentosApi(e.target.value)}
+            className="mt-4 w-full resize-y rounded-xl border border-slate-200 p-3 font-mono text-xs outline-none focus:border-[#00ABE4]" />
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className={GREEN}
+              disabled={ocupado || !documentosApi.trim()}
+              onClick={() => crearTrabajo("api")}>
+              {procesando
+                ? <Loader2 size={15} className="animate-spin" />
+                : <CheckCircle2 size={15} />}
+              Crear lote API
             </button>
-            <button
+            <button type="button" className={OUTLINE}
+              disabled={ocupado}
               onClick={() => {
+                setGrupoApi(null);
                 setDocumentosApi("");
-                setMostrarPendientesApi(false);
-                setTipoDocumentoApi("");
-                setOrigenCargadoApi("");
-                setAnioCargadoApi(null);
-                setGrupoCargadoApi(null);
-              }}
-              className="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 text-[#64748b] rounded-xl text-sm font-semibold transition-colors"
-            >
-              <X className="w-4 h-4" />
-              Cancelar
+              }}>
+              <X size={15} /> Cancelar
             </button>
           </div>
-          <p className="text-[11px] text-[#64748b] mt-3">
-            Al crearlo la ventana se cierra sola. Da clic en la tarjeta del grupo
-            para cargar el siguiente lote de {POR_JOB}.
-          </p>
-        </div>
+        </section>
       )}
 
-      {/* ── Resumen de validación ── */}
-      {resultadoValidacion && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h4 className="text-xs font-semibold text-[#64748b] uppercase tracking-wide mb-3">
-            Resumen de validación
-          </h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <div className="bg-slate-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-[#1e293b]">{resultadoValidacion.total_filas}</p>
-              <p className="text-xs text-[#64748b]">Total filas</p>
-            </div>
-            <div className="bg-emerald-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-emerald-700">{resultadoValidacion.registros_validos}</p>
-              <p className="text-xs text-emerald-600">Válidos</p>
-            </div>
-            <div className="bg-amber-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-amber-700">{resultadoValidacion.registros_duplicados}</p>
-              <p className="text-xs text-amber-600">Duplicados</p>
-            </div>
-            <div className="bg-red-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-red-700">{resultadoValidacion.registros_error}</p>
-              <p className="text-xs text-red-600">Errores</p>
-            </div>
-          </div>
+      {/* IMPORTACIÓN EXCEL - SOLO INSERTAR */}
 
-          {resultadoValidacion.documentos?.length > 0 && (
-            <DocumentosSwiper documentos={resultadoValidacion.documentos} />
+      <section className={`${CARD} p-4 md:p-5`}>
+        <Titulo icono={FileSpreadsheet}
+          titulo="Importar documentos Excel / CSV"
+          descripcion="Valida los archivos e inserta los documentos en la base de datos."
+        />
+
+        <div className="mt-4 flex items-start gap-2 rounded-xl bg-sky-50 p-3">
+          <Info size={16} className="mt-0.5 shrink-0 text-[#0095C5]" />
+          <p className="text-xs leading-relaxed text-slate-600">
+            La importación no inicia consultas RUNT. Después de insertar,
+            utiliza <strong>Cargar pendientes de Excel</strong> para crear
+            lotes de máximo {POR_JOB} documentos.
+          </p>
+        </div>
+
+        <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv"
+          onChange={seleccionarArchivo} className="hidden" />
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" className={OUTLINE}
+            disabled={ocupado}
+            onClick={() => fileInputRef.current?.click()}>
+            <Upload size={15} />
+            <span className="max-w-[200px] truncate">
+              {archivo ? archivo.name : "Seleccionar archivo"}
+            </span>
+          </button>
+
+          <button type="button" className={PRIMARY}
+            disabled={!archivo || ocupado}
+            onClick={validarEInsertar}>
+            {validando
+              ? <Loader2 size={15} className="animate-spin" />
+              : <Database size={15} />}
+            {validando ? "Validando e insertando..." : "Validar e insertar"}
+          </button>
+
+          {archivo && (
+            <button type="button" className={OUTLINE}
+              disabled={ocupado} onClick={limpiarArchivo}>
+              <X size={15} /> Limpiar
+            </button>
           )}
         </div>
-      )}
 
-      {/* ── Progreso de trabajos ── */}
-      {jobsActivos.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Loader2 className="w-5 h-5 text-[#00ABE4] animate-spin" />
-            <h3 className="text-sm font-semibold text-[#1e293b]">
-              Progreso de trabajos ({jobsActivos.length})
+        <p className="mt-3 text-xs text-slate-500">
+          Formatos permitidos: XLSX, XLS y CSV. Columnas:
+          <strong> tipo_documento</strong> y <strong>documento</strong>.
+        </p>
+
+        {validacion && (
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <h3 className="mb-3 text-sm font-bold text-slate-900">
+              Resultado de la validación e inserción
             </h3>
+
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              {[
+                ["Total filas", validacion.total_filas, "bg-slate-50 text-slate-900"],
+                ["Válidos", validacion.registros_validos, "bg-emerald-50 text-emerald-700"],
+                ["Duplicados", validacion.registros_duplicados, "bg-amber-50 text-amber-700"],
+                ["Errores", validacion.registros_error, "bg-red-50 text-red-700"]
+              ].map(([titulo, valor, estilo]) => (
+                <div key={titulo} className={`rounded-xl p-3 text-center ${estilo}`}>
+                  <p className="text-xl font-bold">{numero(valor)}</p>
+                  <p className="mt-1 text-xs">{titulo}</p>
+                </div>
+              ))}
+            </div>
+
+            {validacion.documentos?.length > 0 && (
+              <div className="mt-4">
+                <DocumentosSwiper documentos={validacion.documentos} />
+              </div>
+            )}
           </div>
-          {jobsActivos.map((jobId) => (
-            <JobProgress
-              key={jobId}
-              jobId={jobId}
+        )}
+      </section>
+
+      {/* SEGUIMIENTO DE TRABAJOS */}
+
+      {jobs.length > 0 && (
+        <section className={`${CARD} space-y-3 p-4 md:p-5`}>
+          <Titulo icono={Clock3}
+            titulo={`Seguimiento de trabajos (${jobs.length})`}
+            descripcion="Estado de procesamiento de las búsquedas."
+          />
+
+          {jobs.map(jobId => (
+            <JobProgress key={jobId} jobId={jobId}
               onClose={() => {
-                setJobsActivos((prev) => prev.filter((id) => id !== jobId));
+                setJobs(prev => prev.filter(id => id !== jobId));
                 cargarResultados(1);
               }}
               onComplete={() => {
-                // El worker terminó: refresca TODO lo que depende del job.
-                // Resultados, el historial de abajo y los contadores del año
-                // (que alimentan "Por enviar / Enviadas / Con error").
                 cargarResultados(1);
-                cargarHistorial();
-                cargarSolicitudesApi();
-                refrescarContadoresApi();
+                cargarHistorial(origenHistorial);
+                refrescarApi();
               }}
             />
           ))}
-        </div>
+        </section>
       )}
 
-      {/* ── Resultados ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Eye className="w-5 h-5 text-[#00ABE4]" />
-            <h3 className="text-sm font-semibold text-[#1e293b]">Resultados</h3>
-            <span className="text-xs text-[#64748b]">({pagination.total} total)</span>
-          </div>
-          <button
-            onClick={() => cargarResultados(1)}
-            className="text-xs text-[#00ABE4] hover:text-[#0095C5] font-medium"
-          >
-            Actualizar
-          </button>
-        </div>
+      {/* RESULTADOS */}
 
-        {/* Filtros */}
-        <div className="flex flex-col md:flex-row gap-2 mb-4">
-          <input
-            name="documento"
+      <section className={`${CARD} p-4 md:p-5`}>
+        <Titulo icono={Eye}
+          titulo="Resultados de ubicabilidad"
+          descripcion={`${numero(pagina.total)} registros encontrados`}
+          derecha={
+            <button type="button" className={OUTLINE}
+              disabled={cargandoResultados}
+              onClick={() => cargarResultados(1)}>
+              <RefreshCw size={15}
+                className={cargandoResultados ? "animate-spin" : ""} />
+              Consultar
+            </button>
+          }
+        />
+
+        <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-4">
+          <input className={INPUT} type="text"
+            placeholder="Número de documento"
             value={filtros.documento}
-            onChange={handleFiltroChange}
-            placeholder="Filtrar por documento..."
-            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-[#00ABE4]"
-          />
-          <select
-            value={origenResultados}
-            onChange={(e) => {
+            onChange={e => setFiltros(v => ({ ...v, documento: e.target.value }))} />
+
+          <select className={INPUT} value={origenResultados}
+            onChange={e => {
               setOrigenResultados(e.target.value);
               cargarResultados(1, e.target.value);
-            }}
-            title="Origen de los documentos"
-            className="px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-[#00ABE4]"
-          >
+            }}>
             <option value="">Este módulo</option>
-            {ORIGENES_MODULO.map((o) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
+            {ORIGENES.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
-          <select
-            name="estado"
-            value={filtros.estado}
-            onChange={handleFiltroChange}
-            className="px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-[#00ABE4]"
-          >
+
+          <select className={INPUT} value={filtros.estado}
+            onChange={e => setFiltros(v => ({ ...v, estado: e.target.value }))}>
             <option value="">Todos los estados</option>
             <option value="CONSULTADA">Encontrada</option>
             <option value="SIN_DIRECCION">Sin dirección</option>
             <option value="PENDIENTE">Pendiente</option>
             <option value="ERROR">Error</option>
           </select>
-          <button
-            onClick={aplicarFiltros}
-            className="px-4 py-2 bg-[#00ABE4] text-white rounded-lg text-xs font-semibold hover:bg-[#0095C5]"
-          >
-            Aplicar
+
+          <button type="button" className={PRIMARY}
+            onClick={() => cargarResultados(1)}>
+            <Search size={15} /> Aplicar filtros
           </button>
         </div>
 
         {cargandoResultados ? (
-          <div className="flex items-center justify-center h-32">
-            <Loader2 className="w-6 h-6 text-[#00ABE4] animate-spin" />
+          <div className="flex h-36 items-center justify-center">
+            <Loader2 size={27} className="animate-spin text-[#00ABE4]" />
           </div>
-        ) : resultados.length === 0 ? (
-          <p className="text-sm text-[#94a3b8] text-center py-8">
-            No hay resultados. Cargue un archivo e inicie el scraping.
-          </p>
+        ) : !resultados.length ? (
+          <div className="mt-4">
+            <Vacio icono={Search}
+              mensaje="No hay resultados para los filtros seleccionados." />
+          </div>
         ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="py-2.5 px-3 text-left text-[#94a3b8] font-semibold">Tipo</th>
-                    <th className="py-2.5 px-3 text-left text-[#94a3b8] font-semibold">Documento</th>
-                    <th className="py-2.5 px-3 text-left text-[#94a3b8] font-semibold">Nombres</th>
-                    <th className="py-2.5 px-3 text-left text-[#94a3b8] font-semibold">Dirección</th>
-                    <th className="py-2.5 px-3 text-left text-[#94a3b8] font-semibold">Estado</th>
-                    <th className="py-2.5 px-3 text-left text-[#94a3b8] font-semibold">Fecha consulta</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resultados.map((row) => {
-                    const est = estadoLabel(row);
-                    return (
-                      <tr key={row.id_per_natural_dir} className="border-b border-slate-50 hover:bg-slate-50/60">
-                        <td className="py-2.5 px-3 text-[#64748b]">{row.tipo_documento}</td>
-                        <td className="py-2.5 px-3 font-mono font-semibold text-[#1e293b]">{row.numero_documento}</td>
-                        <td className="py-2.5 px-3 text-[#1e293b]">
-                          {[row.nombres, row.apellidos].filter(Boolean).join(" ") || "—"}
-                        </td>
-                        <td className="py-2.5 px-3 text-[#64748b] max-w-[200px] truncate" title={row.direccion || undefined}>
-                          {row.error_consulta_direccion ? (
-                            <span className="text-red-500">{row.error_consulta_direccion}</span>
-                          ) : row.direccion_encontrada ? (
-                            row.direccion || "—"
-                          ) : (
-                            <span className="text-slate-400">Sin dirección</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${est.class}`}>
-                            {est.label}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-[#94a3b8]">
-                          {row.fecha_consulta_direccion
-                            ? new Date(row.fecha_consulta_direccion).toLocaleDateString("es-CO")
-                            : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Paginación */}
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-4">
-                <button
-                  disabled={pagination.page <= 1}
-                  onClick={() => cargarResultados(pagination.page - 1)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs disabled:opacity-40 hover:bg-slate-50"
-                >
-                  Anterior
-                </button>
-                <span className="text-xs text-[#64748b]">
-                  {pagination.page} / {pagination.totalPages}
-                </span>
-                <button
-                  disabled={pagination.page >= pagination.totalPages}
-                  onClick={() => cargarResultados(pagination.page + 1)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs disabled:opacity-40 hover:bg-slate-50"
-                >
-                  Siguiente
-                </button>
-              </div>
-            )}
-          </>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[800px] text-xs">
+              <thead className="bg-[#E9F1FA]">
+                <tr>
+                  {["Tipo", "Documento", "Nombres", "Dirección", "Estado", "Fecha"].map(h => (
+                    <th key={h} className="px-3 py-3 text-left font-semibold text-slate-600">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {resultados.map((r, i) => {
+                  const [estado, tono] = estadoResultado(r);
+                  return (
+                    <tr key={r.id_per_natural_dir || i}
+                      className="border-b border-slate-100 hover:bg-sky-50/40">
+                      <td className="px-3 py-3">{r.tipo_documento}</td>
+                      <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                        {r.numero_documento}
+                      </td>
+                      <td className="px-3 py-3">
+                        {[r.nombres, r.apellidos].filter(Boolean).join(" ") || "—"}
+                      </td>
+                      <td className="max-w-[220px] truncate px-3 py-3"
+                        title={r.direccion || r.error_consulta_direccion || ""}>
+                        {r.error_consulta_direccion ||
+                          (r.direccion_encontrada ? r.direccion || "—" : "Sin dirección")}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`rounded-full px-2.5 py-1 font-semibold ${tono}`}>
+                          {estado}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-slate-500">
+                        {fechaCol(r.fecha_consulta_direccion)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
 
-      {/* ── Historial de consultados ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-[#1e293b]">
-              Historial de ubicabilidad
-            </h3>
-            <p className="text-xs text-[#64748b] mt-1">
-              {historial.length > 0
-                ? `${historial.length} registro(s) consultados`
-                : "No hay datos cargados"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={origenHistorial}
-              onChange={(e) => {
-                setOrigenHistorial(e.target.value);
-                cargarHistorial(e.target.value);
-              }}
-              title="Origen de los documentos"
-              className="px-3 py-2 rounded-xl border border-slate-200 text-xs text-[#64748b] focus:outline-none focus:border-[#00ABE4]"
-            >
-              <option value="">Este módulo</option>
-              {ORIGENES_MODULO.map((o) => (
-                <option key={o} value={o}>{o}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => cargarHistorial()}
-              disabled={cargandoHistorial}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-xs text-[#64748b] hover:bg-slate-50 disabled:opacity-60"
-            >
-              {cargandoHistorial ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Upload size={14} />
-              )}
-              Recargar
-            </button>
-            <button
-              onClick={exportarExcel}
-              disabled={historial.length === 0}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
-              style={{ backgroundColor: "#00ABE4" }}
-            >
-              <Download size={14} />
-              Exportar Excel
-            </button>
-          </div>
+        <Paginacion page={pagina.page}
+          pages={pagina.totalPages} total={pagina.total}
+          cambiar={p => cargarResultados(p)}
+        />
+      </section>
+
+      {/* HISTORIAL */}
+
+      <section className={`${CARD} p-4 md:p-5`}>
+        <Titulo icono={ClipboardList}
+          titulo="Historial de ubicabilidad"
+          descripcion={`${numero(historial.length)} registros consultados`}
+        />
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <select className={`${INPUT} w-full sm:w-auto`}
+            value={origenHistorial}
+            onChange={e => {
+              setOrigenHistorial(e.target.value);
+              cargarHistorial(e.target.value);
+            }}>
+            <option value="">Este módulo</option>
+            {ORIGENES.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+
+          <button type="button" className={OUTLINE}
+            disabled={cargandoHistorial}
+            onClick={() => cargarHistorial(origenHistorial)}>
+            <RefreshCw size={15}
+              className={cargandoHistorial ? "animate-spin" : ""} />
+            Recargar
+          </button>
+
+          <button type="button" className={PRIMARY}
+            disabled={!historial.length || cargandoHistorial}
+            onClick={exportarExcel}>
+            <Download size={15} /> Exportar Excel
+          </button>
         </div>
-      </div>
+
+        <div className="mt-3 flex items-start gap-2 rounded-xl bg-sky-50 p-3">
+          <Info size={15} className="shrink-0 text-[#0095C5]" />
+          <p className="text-xs text-slate-600">
+            La exportación incluye los registros devueltos por el servicio
+            de historial para el origen seleccionado.
+          </p>
+        </div>
+      </section>
+
+      {/* MODALES */}
 
       <ConfirmModal
-        open={confirmLimpiarOpen}
-        title="Limpiar documentos"
-        message="¿Estás seguro de eliminar todos los documentos pendientes cargados desde Excel? Esta acción no se puede deshacer."
-        confirmText="Eliminar"
-        onConfirm={handleConfirmLimpiar}
-        onCancel={() => setConfirmLimpiarOpen(false)}
-      />
-
-      <ConfirmModal
-        open={confirmLimpiarApiOpen}
-        title="Limpiar solicitudes API"
-        message={`¿Eliminar ${
-          origenSeleccionadoApi
-            ? `las solicitudes pendientes de "${origenSeleccionadoApi}"`
-            : "TODAS las solicitudes API pendientes"
-        }? Solo se borran registros aún no consultados. Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        onConfirm={handleConfirmLimpiarApi}
-        onCancel={() => setConfirmLimpiarApiOpen(false)}
-      />
-
-      <ConfirmModal
-        open={!!confirmEnvioAnioApi}
-        title="Enviar a contravenciones"
-        message={
-          confirmEnvioAnioApi
-            ? `Se enviarán al servicio de enriquecimiento de Contravenciones las ` +
-              `${confirmEnvioAnioApi.conDireccion.toLocaleString("es-CO")} persona(s) del año ` +
-              `${etiquetaAnio(confirmEnvioAnioApi.anio)} que ya tienen dirección ` +
-              `(${confirmEnvioAnioApi.enviadas.toLocaleString("es-CO")} ya enviada(s), ` +
-              `${confirmEnvioAnioApi.porEnviar.toLocaleString("es-CO")} por enviar). ` +
-              `Se reenvían también las ya enviadas, por si cambió su dirección.`
-            : ""
-        }
-        confirmText="Enviar"
-        onConfirm={handleConfirmEnvioAnio}
-        onCancel={() => setConfirmEnvioAnioApi(null)}
+        open={Boolean(confirmEnvio)}
+        title="Enviar resultados a Contravenciones"
+        message={confirmEnvio
+          ? `Año ${anioTexto(confirmEnvio.anio)}: ${numero(confirmEnvio.conDireccion)} personas con dirección, ${numero(confirmEnvio.enviadas)} ya enviadas y ${numero(confirmEnvio.porEnviar)} por enviar. Se reenviarán también las respuestas enviadas anteriormente. ¿Desea continuar?`
+          : ""}
+        confirmText="Enviar resultados"
+        onConfirm={enviarRespuestas}
+        onCancel={() => setConfirmEnvio(null)}
       />
 
       <ErroresEnvioModal
         open={erroresAbiertos}
         titulo={`Respuestas con error · ${erroresContexto.etiqueta}`}
-        subtitulo={`Origen: ${erroresContexto.origen || "Todos los servicios"} · rechazadas por Contravenciones`}
+        subtitulo={`Origen: ${erroresContexto.origen || "Todos los servicios"} · Rechazadas por Contravenciones`}
         errores={erroresLista}
         cargando={erroresCargando}
         error={erroresError}
-        etiquetaAnio={etiquetaAnio}
+        etiquetaAnio={anioTexto}
         onCerrar={() => setErroresAbiertos(false)}
-        onReintentar={erroresContexto.anio !== "" ? reintentarDesdeErrores : undefined}
+        onReintentar={erroresContexto.anio !== "" ? reintentarErrores : undefined}
       />
     </div>
   );

@@ -1,66 +1,159 @@
-import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, X } from "lucide-react";
 
-export default function ConfirmModal({ open, title, message, confirmText = "Eliminar", onConfirm, onCancel, loading = false }) {
+import { motion, AnimatePresence } from "framer-motion";
+import { AlertTriangle, X, Loader2 } from "lucide-react";
+
+export default function ConfirmModal({
+  open,
+  title,
+  message,
+  confirmText = "Eliminar",
+  onConfirm,
+  onCancel,
+  loading = false
+}) {
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+
+          {/* FONDO ORIGINAL */}
+
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#061527]/65 backdrop-blur-[3px]"
             onClick={onCancel}
           />
 
-          {/* Modal */}
+          {/* MODAL */}
+
           <motion.div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="confirm-modal-title"
+            aria-describedby="confirm-modal-message"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.2 }}
-            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+            className="
+              relative w-full max-w-[430px]
+              overflow-hidden rounded-2xl
+              border border-slate-200 bg-white
+              shadow-[0_24px_70px_rgba(0,0,0,0.25)]
+              dark:border-slate-700 dark:bg-[#172539]
+            "
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
-                  <AlertTriangle size={20} className="text-red-500" />
+
+            {/* ==========================================
+                ENCABEZADO
+            ========================================== */}
+
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+
+              <div className="flex min-w-0 items-center gap-3">
+
+                {/* ÍCONO DE ALERTA */}
+
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+                  <AlertTriangle size={22} strokeWidth={1.9} />
                 </div>
-                <h3 className="font-bold text-[#1e293b]">{title}</h3>
+
+                {/* TÍTULO */}
+
+                <div className="min-w-0">
+                  <p className="mb-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+                    Confirmación requerida
+                  </p>
+
+                  <h3
+                    id="confirm-modal-title"
+                    className="break-words text-[16px] font-bold leading-5 text-slate-900 dark:text-slate-100"
+                  >
+                    {title}
+                  </h3>
+                </div>
               </div>
+
+              {/* CERRAR */}
+
               <button
+                type="button"
                 onClick={onCancel}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors"
+                aria-label="Cerrar confirmación"
+                title="Cerrar"
+                className="
+                  flex h-9 w-9 shrink-0 items-center justify-center
+                  rounded-xl text-slate-400 transition-colors
+                  hover:bg-slate-100 hover:text-slate-700
+                  dark:text-slate-400 dark:hover:bg-slate-700
+                  dark:hover:text-slate-100
+                "
               >
-                <X size={18} className="text-[#64748b]" />
+                <X size={19} />
               </button>
             </div>
 
-            {/* Body */}
-            <div className="p-5">
-              <p className="text-sm text-[#64748b] leading-relaxed">{message}</p>
+            {/* ==========================================
+                MENSAJE
+            ========================================== */}
+
+            <div className="px-5 py-5">
+              <p
+                id="confirm-modal-message"
+                className="break-words text-[13px] leading-6 text-slate-600 dark:text-slate-300"
+              >
+                {message}
+              </p>
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-100 bg-slate-50">
+            {/* ==========================================
+                BOTONES
+            ========================================== */}
+
+            <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50/70 px-5 py-4 dark:border-slate-700 dark:bg-[#111F32]">
+
+              {/* CANCELAR */}
+
               <button
+                type="button"
                 onClick={onCancel}
                 disabled={loading}
-                className="px-5 py-2.5 rounded-xl text-sm font-medium text-[#64748b] hover:bg-slate-200 transition-colors disabled:opacity-50"
+                className="
+                  inline-flex min-h-11 flex-1 items-center justify-center
+                  rounded-xl border border-slate-200
+                  bg-white px-4 text-xs font-semibold
+                  text-slate-600 transition-colors
+                  hover:bg-slate-100
+                  disabled:cursor-not-allowed disabled:opacity-50
+                  dark:border-slate-700 dark:bg-[#172539]
+                  dark:text-slate-300 dark:hover:bg-slate-700
+                  sm:flex-none
+                "
               >
                 Cancelar
               </button>
+
+              {/* CONFIRMAR */}
+
               <button
+                type="button"
                 onClick={onConfirm}
                 disabled={loading}
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="
+                  inline-flex min-h-11 flex-1 items-center justify-center
+                  gap-2 rounded-xl bg-red-600
+                  px-5 text-xs font-bold text-white
+                  shadow-sm transition-colors
+                  hover:bg-red-700
+                  disabled:cursor-not-allowed disabled:opacity-50
+                  sm:flex-none
+                "
               >
                 {loading ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <Loader2 size={16} className="animate-spin" />
                     Eliminando...
                   </>
                 ) : (
@@ -68,6 +161,7 @@ export default function ConfirmModal({ open, title, message, confirmText = "Elim
                 )}
               </button>
             </div>
+
           </motion.div>
         </div>
       )}

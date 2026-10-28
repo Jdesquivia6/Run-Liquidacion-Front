@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.autocore-dark, .autocore-dark *));
 
 :root {
   --text: #475569;
@@ -165,4 +166,238 @@ button {
 /* Transición suave para filas de tabla */
 tbody tr {
   animation: fade-in 0.3s ease-out both;
+}
+
+
+/* ======================================================
+   AUTOCORE - DARK MODE CORPORATIVO
+   Alcance: únicamente mientras DashboardLayout esté activo
+   ====================================================== */
+
+body.autocore-dark {
+  --text: #cbd5e1;
+  --text-h: #f1f5f9;
+  --bg: #0b1424;
+  --border: #334155;
+  --code-bg: #172539;
+  --accent: #38bdf8;
+  --accent-bg: rgba(56,189,248,.12);
+  --accent-border: rgba(56,189,248,.3);
+
+  background: #0b1424 !important;
+  color: #cbd5e1;
+  color-scheme: dark;
+}
+
+/* Fondo de los módulos y contenedores principales */
+
+body.autocore-dark :is(
+  [class~="bg-white"],
+  [class~="bg-white/95"],
+  [class~="bg-white/90"],
+  [class~="bg-white/80"],
+  [class~="bg-[#FFFFFF]"]
+) {
+  background-color: #172539 !important;
+}
+
+body.autocore-dark :is(
+  [class~="bg-[#E9F1FA]"],
+  [class~="bg-[#F5F9FC]"],
+  [class~="bg-[#F8FBFD]"],
+  [class~="bg-slate-50"],
+  [class~="bg-slate-50/50"],
+  [class~="bg-slate-50/60"],
+  [class~="bg-slate-50/70"],
+  [class~="bg-slate-100"],
+  [class~="bg-gray-50"],
+  [class~="bg-gray-100"]
+) {
+  background-color: #0b1424 !important;
+}
+
+/* Fondos azules usados por tarjetas, filtros y selecciones */
+
+body.autocore-dark :is(
+  [class~="bg-sky-50"],
+  [class~="bg-sky-50/40"],
+  [class~="bg-sky-50/50"],
+  [class~="bg-sky-50/60"],
+  [class~="bg-sky-100"],
+  [class~="bg-[#EAF6FC]"],
+  [class~="bg-[#E9F1FA]"]
+) {
+  background-color: #123347 !important;
+}
+
+/* Tipografía */
+
+body.autocore-dark :is(
+  [class~="text-slate-950"],
+  [class~="text-slate-900"],
+  [class~="text-slate-800"],
+  [class~="text-gray-900"],
+  [class~="text-gray-800"]
+) {
+  color: #f1f5f9 !important;
+}
+
+body.autocore-dark :is(
+  [class~="text-slate-700"],
+  [class~="text-slate-600"],
+  [class~="text-gray-700"],
+  [class~="text-gray-600"]
+) {
+  color: #cbd5e1 !important;
+}
+
+body.autocore-dark :is(
+  [class~="text-slate-500"],
+  [class~="text-slate-400"],
+  [class~="text-gray-500"],
+  [class~="text-gray-400"]
+) {
+  color: #94a3b8 !important;
+}
+
+/* Acentos de AutoCore: más legibles en oscuro */
+
+body.autocore-dark :is(
+  [class~="text-[#0095C5]"],
+  [class~="text-[#00ABE4]"]
+) {
+  color: #38bdf8 !important;
+}
+
+/* Bordes de tarjetas, tablas y formularios */
+
+body.autocore-dark :is(
+  [class~="border-slate-100"],
+  [class~="border-slate-200"],
+  [class~="border-slate-300"],
+  [class~="border-gray-100"],
+  [class~="border-gray-200"]
+) {
+  border-color: #334155 !important;
+}
+
+/* Campos de entrada */
+
+body.autocore-dark :is(
+  input,
+  textarea,
+  select
+) {
+  background-color: #111f32;
+  color: #f1f5f9;
+  border-color: #334155;
+}
+
+body.autocore-dark :is(
+  input,
+  textarea
+)::placeholder {
+  color: #94a3b8;
+}
+
+body.autocore-dark :is(
+  input:disabled,
+  textarea:disabled,
+  select:disabled
+) {
+  background-color: #1e293b;
+  color: #64748b;
+}
+
+body.autocore-dark option {
+  background-color: #172539;
+  color: #f1f5f9;
+}
+
+/* Tablas de datos */
+
+body.autocore-dark table {
+  color: #e2e8f0;
+}
+
+body.autocore-dark :is(
+  thead,
+  [class~="bg-[#E9F1FA]"]
+) {
+  background-color: #14263a !important;
+}
+
+body.autocore-dark :is(
+  th,
+  td
+) {
+  border-color: #334155;
+}
+
+/* Hover en tablas */
+
+body.autocore-dark tbody tr:hover {
+  background-color: #21364d;
+}
+
+/* Elementos de formularios nativos */
+
+body.autocore-dark input[type="checkbox"],
+body.autocore-dark input[type="radio"] {
+  accent-color: #00abe4;
+}
+
+/* Barras de desplazamiento */
+
+body.autocore-dark ::-webkit-scrollbar-track {
+  background: #0b1424;
+}
+
+body.autocore-dark ::-webkit-scrollbar-thumb {
+  background: #334b65;
+}
+
+body.autocore-dark ::-webkit-scrollbar-thumb:hover {
+  background: #0095c5;
+}
+
+/* Diálogos SweetAlert */
+
+body.autocore-dark .swal2-popup {
+  background: #172539 !important;
+  color: #f1f5f9 !important;
+}
+
+body.autocore-dark .swal2-title {
+  color: #f1f5f9 !important;
+}
+
+body.autocore-dark .swal2-html-container {
+  color: #cbd5e1 !important;
+}
+
+body.autocore-dark .swal2-input,
+body.autocore-dark .swal2-textarea,
+body.autocore-dark .swal2-select {
+  background: #111f32 !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+/* Transición entre los dos temas */
+
+@media (prefers-reduced-motion: no-preference) {
+  body.autocore-dark :is(
+    main,
+    header,
+    aside,
+    section,
+    input,
+    textarea,
+    select,
+    button
+  ) {
+    transition-property: background-color, border-color, color;
+    transition-duration: 180ms;
+  }
 }

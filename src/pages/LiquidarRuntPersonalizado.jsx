@@ -1,22 +1,26 @@
-import { useState, useEffect, useRef } from "react";
+
+import { useState, useEffect, useRef, useCallback } from "react";
 import Header from "../components/Header";
 import InputField from "../components/InputField";
 import SelectField from "../components/FormSection";
 import { API_BASE } from "../services/liquidacionApi";
 import { crearJob, obtenerDetalleJob } from "../services/workerJobsApi";
-import Swal from "sweetalert2";
-import axios from "axios";
 import JobProgress from "../components/JobProgress";
-import Pagination from "../components/Pagination";
+import Swal from "sweetalert2";
 import { v4 as uuidv4 } from "uuid";
-import {
-  Loader2, FileText, CheckCircle2, AlertCircle,
-  Plus, Trash2, ShoppingCart, Download, ReceiptText,
-  Package, AlertTriangle, CircleCheck, Printer,
-  Volume2, VolumeX, User, Hash, Lightbulb
-} from "lucide-react";
 import toast from "react-hot-toast";
+import {
+  Loader2, FileText, CheckCircle2, AlertCircle, Plus,
+  Trash2, ShoppingCart, Download, ReceiptText, Package,
+  AlertTriangle, Printer, Volume2, VolumeX, Lightbulb,
+  ChevronLeft, ChevronRight, ClipboardCheck, X, UserRound,
+  IdCard
+} from "lucide-react";
 import sonidoLiquidacion from "../assets/sonidoLiquidacion.mp3";
+
+// ======================================================
+// CONFIGURACIÓN
+// ======================================================
 
 const TIPOS_DOCUMENTO = [
   { value: "Carnet Diplomático", label: "Carnet Diplomático" },
@@ -26,18 +30,21 @@ const TIPOS_DOCUMENTO = [
   { value: "Cédula de Extranjería", label: "Cédula de Extranjería" },
   { value: "NIT", label: "NIT" },
   { value: "Pasaporte", label: "Pasaporte" },
-  { value: "Permiso por Protección Temporal", label: "Permiso por Protección Temporal" },
+  {
+    value: "Permiso por Protección Temporal",
+    label: "Permiso por Protección Temporal"
+  },
   { value: "Registro Civil", label: "Registro Civil" },
   { value: "TI2", label: "TI2" },
   { value: "Tarjeta de Identidad", label: "Tarjeta de Identidad" }
 ];
 
-const TRAMITES_DISPONIBLES = [
+const TRAMITES = [
   { value: "TRÁMITE MATRÍCULA INICIAL", label: "MATRÍCULA INICIAL" },
   { value: "TRÁMITE INSCRIPCIÓN ALERTA", label: "PIGNORADO" }
 ];
 
-const CLASIFICACIONES_DISPONIBLES = [
+const CLASIFICACIONES = [
   { value: "AUTOMOVIL", label: "AUTOMOVIL" },
   { value: "MEDIDAS CAUTELARES", label: "MEDIDAS CAUTELARES" },
   { value: "MOTO", label: "MOTO" },
@@ -45,257 +52,402 @@ const CLASIFICACIONES_DISPONIBLES = [
 ];
 
 const MAX_CARRITO = 40;
+const POR_PAGINA = 10;
 
-function labelTramite(value) {
-  return TRAMITES_DISPONIBLES.find(t => t.value === value)?.label || value;
+const CARD = "rounded-2xl border border-slate-200 bg-white shadow-sm";
+const BTN = "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50";
+const PRIMARY = `${BTN} bg-[#00ABE4] text-white hover:bg-[#0095C5]`;
+const OUTLINE = `${BTN} border border-slate-200 bg-white text-slate-600 hover:bg-slate-50`;
+
+const labelTramite = valor =>
+  TRAMITES.find(t => t.value === valor)?.label || valor;
+
+const labelTipoDoc = valor =>
+  TIPOS_DOCUMENTO.find(t => t.value === valor)?.label || valor;
+
+const generarKey = (tipo, numero, placa) =>
+  JSON.stringify([
+    String(tipo).trim(),
+    String(numero).trim(),
+    String(placa).trim().toUpperCase()
+  ]);
+
+const escapeHtml = valor =>
+  String(valor ?? "").replace(
+    /[&<>"']/g,
+    c => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[c]
+  );
+
+const fechaHoy = () => {
+  const partes = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+
+  const get = tipo => partes.find(p => p.type === tipo)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+};
+
+// ======================================================
+// PAGINACIÓN
+// ======================================================
+
+function Paginacion({ pagina, total, cambiar }) {
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+
+  if (total <= POR_PAGINA) return null;
+
+  const inicio = (pagina - 1) * POR_PAGINA + 1;
+  const fin = Math.min(pagina * POR_PAGINA, total);
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+      <p className="text-xs text-slate-500">
+        Mostrando <strong>{inicio} a {fin}</strong> de {total}
+      </p>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Página anterior"
+          disabled={pagina <= 1}
+          onClick={() => cambiar(p => Math.max(1, p - 1))}
+          className={`${OUTLINE} !px-3`}
+        >
+          <ChevronLeft size={15} />
+        </button>
+
+        <span className="text-xs font-semibold text-slate-600">
+          Página {pagina} de {paginas}
+        </span>
+
+        <button
+          type="button"
+          aria-label="Página siguiente"
+          disabled={pagina >= paginas}
+          onClick={() => cambiar(p => Math.min(paginas, p + 1))}
+          className={`${OUTLINE} !px-3`}
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function labelTipoDoc(value) {
-  return TIPOS_DOCUMENTO.find(t => t.value === value)?.label || value;
-}
-
-function formatBytes(bytes) {
-  if (!bytes) return "N/A";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
+// ======================================================
+// ENCABEZADO AUTOCORE
+// ======================================================
 
 function PageHeader({ totalItems, totalTramites }) {
   return (
-    <div className="bg-gradient-to-br from-[#00ABE4] to-[#0095C5] rounded-[28px] shadow-lg shadow-[#00ABE4]/20 p-6 md:p-8 relative overflow-hidden">
-      <div className="absolute right-4 bottom-3 opacity-10 select-none pointer-events-none hidden md:block">
-        <ReceiptText className="w-40 h-40" />
-      </div>
-      <div className="absolute right-6 top-6 opacity-10 select-none pointer-events-none md:hidden">
-        <ReceiptText className="w-20 h-20" />
-      </div>
+    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#00ABE4] to-[#0095C5] px-6 py-5 text-white shadow-lg md:px-8">
+      <ReceiptText
+        size={110}
+        className="pointer-events-none absolute right-6 top-1/2 hidden -translate-y-1/2 opacity-15 md:block"
+      />
+
       <div className="relative z-10">
-        <div className="flex items-center gap-1.5 mb-3">
-          <FileText className="w-3.5 h-3.5 text-white/80" />
-          <span className="text-xs font-medium text-white/80 uppercase tracking-wider">
-            Liquidaciones Personalizadas RUNT
-          </span>
-        </div>
-        <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight">
-          Liquidar valores RUNT
-        </h2>
-        <p className="mt-2 text-sm md:text-base text-white/80 max-w-xl leading-relaxed">
-          Agregue tipo documento, número, placas, seleccione trámites y genere liquidaciones masivas con solicitante personalizado.
+        <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-sky-100">
+          <IdCard size={15} />
+          LIQUIDACIONES PERSONALIZADAS RUNT
         </p>
+
+        <h1 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">
+          Liquidar valores RUNT
+        </h1>
+
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-sky-50">
+          Genere liquidaciones masivas con un solicitante personalizado,
+          relacionando su documento, placa, trámite y clasificación.
+        </p>
+
         {totalItems > 0 && (
-          <div className="flex items-center gap-2 mt-4 flex-wrap">
-            <span className="bg-white/20 backdrop-blur text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-              <ShoppingCart size={12} />
-              {totalItems} item{totalItems !== 1 ? "s" : ""}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold">
+              <ShoppingCart size={13} />
+              {totalItems} ítem{totalItems !== 1 ? "s" : ""}
             </span>
-            <span className="bg-white/20 backdrop-blur text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-              <FileText size={12} />
+
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold">
+              <FileText size={13} />
               {totalTramites} trámite{totalTramites !== 1 ? "s" : ""}
             </span>
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
-function AlertBanner({ message }) {
-  return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2">
-      <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-      <p className="text-xs text-amber-700 leading-relaxed">{message}</p>
-    </div>
-  );
-}
+// ======================================================
+// FORMULARIO PERSONALIZADO
+// ======================================================
 
-function HelpText({ children }) {
-  return (
-    <div className="mt-3 px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl">
-      <p className="text-xs text-[#64748b] leading-relaxed">{children}</p>
-    </div>
-  );
-}
-
-function AddPlateCard({
-  tipoDocInput, setTipoDocInput,
-  numDocInput, setNumDocInput,
-  placaInput, setPlacaInput,
-  tramiteActual, setTramiteActual,
-  clasificacionActual, setClasificacionActual,
-  onAgregar,
-  onBorrarCampos,
-  disabled
+function Formulario({
+  tipoDoc, setTipoDoc,
+  numeroDoc, setNumeroDoc,
+  placa, setPlaca,
+  tramite, setTramite,
+  clasificacion, setClasificacion,
+  agregar, limpiar, disabled
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div className="mb-1">
-        <h3 className="text-sm font-semibold text-[#1e293b]">
+    <section className={`${CARD} p-4 md:p-5`}>
+      <div className="mb-4">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+          <UserRound size={17} className="text-[#00ABE4]" />
           Agregar liquidación personalizada
-        </h3>
-        <p className="text-xs text-[#64748b] mt-0.5">
-          Seleccione tipo documento, ingrese número, placa, trámite y clasificación.
+        </h2>
+
+        <p className="mt-1 text-xs text-slate-500">
+          Ingrese los datos del solicitante y seleccione el trámite
+          correspondiente al vehículo.
         </p>
       </div>
 
-      <div className="space-y-4 mt-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <SelectField
             label="Tipo documento *"
             name="tipoDocInput"
-            value={tipoDocInput}
-            onChange={(e) => setTipoDocInput(e.target.value)}
+            value={tipoDoc}
+            onChange={e => setTipoDoc(e.target.value)}
             options={TIPOS_DOCUMENTO}
           />
 
           <InputField
             label="Número documento *"
             name="numDocInput"
-            value={numDocInput}
-            onChange={(e) => setNumDocInput(e.target.value)}
+            value={numeroDoc}
+            onChange={e => setNumeroDoc(e.target.value)}
             placeholder="Ej: 1234567890"
           />
 
           <InputField
             label="Placa *"
             name="placaInput"
-            value={placaInput}
-            onChange={(e) => setPlacaInput(e.target.value)}
+            value={placa}
+            onChange={e => setPlaca(e.target.value)}
             placeholder="Ej: ABC123"
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <SelectField
             label="Trámite *"
             name="tramiteActual"
-            value={tramiteActual}
-            onChange={(e) => setTramiteActual(e.target.value)}
-            options={TRAMITES_DISPONIBLES}
+            value={tramite}
+            onChange={e => setTramite(e.target.value)}
+            options={TRAMITES}
           />
 
           <SelectField
             label="Clasificación *"
             name="clasificacionActual"
-            value={clasificacionActual}
-            onChange={(e) => setClasificacionActual(e.target.value)}
-            options={CLASIFICACIONES_DISPONIBLES}
+            value={clasificacion}
+            onChange={e => setClasificacion(e.target.value)}
+            options={CLASIFICACIONES}
           />
 
           <div className="flex items-end gap-2">
             <button
-              onClick={onAgregar}
+              type="button"
+              onClick={agregar}
               disabled={disabled}
-              className="flex-1 bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed"
+              className={`${PRIMARY} min-h-[46px] flex-1`}
             >
-              <Plus className="w-4 h-4" />
+              <Plus size={17} />
               Agregar
             </button>
+
             <button
               type="button"
-              onClick={onBorrarCampos}
-              className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium active:scale-95"
-              title="Borrar campos"
+              onClick={limpiar}
+              disabled={disabled}
+              title="Limpiar campos"
+              className={`${BTN} min-h-[46px] border border-red-200 bg-red-50 text-red-600 hover:bg-red-100`}
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 size={16} />
             </button>
           </div>
         </div>
       </div>
 
-      <HelpText>
-        <Lightbulb size={14} className="inline mr-1 text-amber-500" />
-        Una liquidación se identifica por tipo doc + número doc + placa.
-        Para agregar varios trámites a una misma combinación, no cambie los campos de documento ni placa entre cada "Agregar".
-      </HelpText>
+      <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <Lightbulb size={16} className="mt-0.5 shrink-0 text-amber-500" />
+
+        <p className="text-xs leading-relaxed text-slate-600">
+          Cada liquidación se identifica por tipo de documento,
+          número y placa. Para agregar varios trámites a la misma
+          combinación, mantenga esos tres campos y cambie el trámite.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ======================================================
+// AVISO DE TARIFAS
+// ======================================================
+
+function AvisoTarifas() {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <AlertTriangle
+        size={17}
+        className="mt-0.5 shrink-0 text-amber-600"
+      />
+
+      <div>
+        <p className="text-xs font-bold text-amber-800">
+          Información importante sobre liquidaciones
+        </p>
+
+        <p className="mt-1 text-xs leading-relaxed text-amber-700">
+          La tarifa se selecciona automáticamente según el trámite
+          y su clasificación. Para MEDIDAS CAUTELARES deberá aceptar
+          manualmente la confirmación que presente RUNT.
+          El solicitante debe estar inscrito en RUNT.
+          Máximo 40 ítems por lote.
+        </p>
+      </div>
     </div>
   );
 }
 
-function CartTable({ items, totalTramites, onEliminarItem, onEliminarTramite, onLimpiarTodo }) {
-  if (items.length === 0) return null;
+// ======================================================
+// CARRITO PERSONALIZADO
+// ======================================================
 
-  const [page, setPage] = useState(1);
-  const itemsPerPage = 15;
-  const totalPages = Math.ceil(items.length / itemsPerPage);
-  useEffect(() => { if (page > totalPages) setPage(1); }, [items.length]);
-  const paginatedItems = items.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+function Carrito({
+  items, totalTramites,
+  eliminar, eliminarTramite, limpiar, disabled
+}) {
+  const [pagina, setPagina] = useState(1);
+  const totalPaginas = Math.max(
+    1, Math.ceil(items.length / POR_PAGINA)
+  );
+
+  useEffect(() => {
+    setPagina(p => Math.min(p, totalPaginas));
+  }, [totalPaginas]);
+
+  if (!items.length) return null;
+
+  const visibles = items.slice(
+    (pagina - 1) * POR_PAGINA,
+    pagina * POR_PAGINA
+  );
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#1e293b] flex items-center gap-2">
-          <ShoppingCart className="w-4 h-4 text-[#00ABE4]" />
-          Carrito de liquidaciones
-          <span className="text-xs text-[#64748b] font-normal">
-            · {items.length} item{items.length !== 1 ? "s" : ""} · {totalTramites} trámite{totalTramites !== 1 ? "s" : ""}
-          </span>
-        </h3>
+    <section className={`${CARD} p-4 md:p-5`}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+            <ShoppingCart size={17} className="text-[#00ABE4]" />
+            Carrito de liquidaciones
+          </h2>
+
+          <p className="mt-1 text-xs text-slate-500">
+            {items.length} ítems · {totalTramites} trámites
+          </p>
+        </div>
+
         <button
-          onClick={onLimpiarTodo}
-          className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all"
+          type="button"
+          disabled={disabled}
+          onClick={limpiar}
+          className={`${BTN} bg-red-50 text-red-600 hover:bg-red-100`}
         >
+          <Trash2 size={14} />
           Limpiar todo
         </button>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100">
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">#</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Documento</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Número</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Placa</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Trámites</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Clasificación</th>
-              <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#94a3b8]">Acción</th>
+        <table className="w-full min-w-[800px] text-sm">
+          <thead className="bg-[#E9F1FA]">
+            <tr>
+              {[
+                "#", "Tipo documento", "Número", "Placa",
+                "Trámites", "Clasificación", "Acción"
+              ].map(h => (
+                <th
+                  key={h}
+                  className="px-3 py-3 text-left text-xs font-semibold text-slate-600"
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
+
           <tbody>
-            {paginatedItems.map((item, i) => (
+            {visibles.map((item, i) => (
               <tr
                 key={item.id}
-                className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors"
+                className="border-b border-slate-100 hover:bg-sky-50/40"
               >
-                <td className="py-3 px-3 text-[#94a3b8] text-xs">{(page - 1) * itemsPerPage + i + 1}</td>
-                <td className="py-3 px-3">
-                  <span className="text-xs text-[#64748b]">{labelTipoDoc(item.tipoDocumento)}</span>
+                <td className="px-3 py-3 text-xs text-slate-400">
+                  {(pagina - 1) * POR_PAGINA + i + 1}
                 </td>
-                <td className="py-3 px-3">
-                  <span className="font-mono font-bold text-[#1e293b] text-sm">{item.numeroDocumento}</span>
+
+                <td className="px-3 py-3 text-xs text-slate-600">
+                  {labelTipoDoc(item.tipoDocumento)}
                 </td>
-                <td className="py-3 px-3">
-                  <span className="font-mono font-bold text-[#1e293b] text-sm">{item.placa}</span>
+
+                <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                  {item.numeroDocumento}
                 </td>
-                <td className="py-3 px-3">
+
+                <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                  {item.placa}
+                </td>
+
+                <td className="px-3 py-3">
                   <div className="flex flex-wrap gap-1.5">
-                    {item.tramites.map((t, ti) => (
+                    {item.tramites.map((t, j) => (
                       <span
-                        key={ti}
-                        className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full"
+                        key={j}
+                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
                       >
                         {labelTramite(t.tramite)}
+
                         <button
-                          onClick={() => onEliminarTramite(item.id, ti)}
-                          className="hover:text-red-500 transition-colors font-bold ml-0.5"
+                          type="button"
+                          disabled={disabled}
+                          title="Eliminar trámite"
+                          aria-label={`Eliminar ${labelTramite(t.tramite)}`}
+                          onClick={() => eliminarTramite(item.id, j)}
+                          className="ml-1 rounded p-0.5 hover:bg-red-50 hover:text-red-600"
                         >
-                          ×
+                          <X size={12} />
                         </button>
                       </span>
                     ))}
                   </div>
                 </td>
-                <td className="py-3 px-3">
-                  <span className="text-xs text-[#64748b]">
-                    {item.tramites[0]?.clasificacion || "—"}
-                  </span>
+
+                <td className="px-3 py-3 text-xs text-slate-600">
+                  {item.tramites[0]?.clasificacion || "—"}
                 </td>
-                <td className="py-3 px-3 text-center">
+
+                <td className="px-3 py-3">
                   <button
-                    onClick={() => onEliminarItem(item.id)}
-                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    title="Eliminar item"
+                    type="button"
+                    disabled={disabled}
+                    title="Eliminar ítem"
+                    onClick={() => eliminar(item.id)}
+                    className="rounded-lg p-2 text-red-500 hover:bg-red-50"
                   >
                     <Trash2 size={15} />
                   </button>
@@ -306,238 +458,325 @@ function CartTable({ items, totalTramites, onEliminarItem, onEliminarTramite, on
         </table>
       </div>
 
-      <Pagination currentPage={page} totalItems={items.length} onPageChange={setPage} />
-    </div>
+      <Paginacion
+        pagina={pagina}
+        total={items.length}
+        cambiar={setPagina}
+      />
+    </section>
   );
 }
 
-function EmptyCart() {
+// ======================================================
+// CARRITO VACÍO
+// ======================================================
+
+function CarritoVacio() {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 md:p-12 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-        <ShoppingCart className="w-8 h-8 text-slate-300" />
+    <section className={`${CARD} p-10 text-center md:p-12`}>
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+        <ShoppingCart size={30} className="text-slate-300" />
       </div>
-      <h3 className="text-base font-bold text-[#1e293b] mb-1">Carrito vacío</h3>
-      <p className="text-sm text-[#64748b] max-w-sm mx-auto leading-relaxed">
-        Agregue tipo documento, número, placas y trámites para generar liquidaciones RUNT personalizadas en lote.
-        Máximo {MAX_CARRITO} items por generación.
+
+      <h3 className="text-base font-bold text-slate-900">
+        Carrito vacío
+      </h3>
+
+      <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+        Ingrese el documento del solicitante, una placa y sus trámites
+        para generar liquidaciones personalizadas en lote.
+        Máximo 40 ítems por generación.
       </p>
-    </div>
+    </section>
   );
 }
 
-function BatchSummary({
-  totalItems,
-  totalTramites,
-  loading,
-  progreso,
-  onGenerar,
-  puedeEnviar,
-  attemptedSubmit,
-  errores
+// ======================================================
+// RESUMEN DEL LOTE
+// ======================================================
+
+function ResumenLote({
+  items, tramites, loading, progreso,
+  generar, puedeEnviar, errores, attempted
 }) {
-  const porcentaje = Math.min((totalItems / MAX_CARRITO) * 100, 100);
-  const estado = loading ? "Procesando" : totalItems === 0 ? "Sin datos" : "Listo para generar";
+  const porcentaje = Math.min(
+    items / MAX_CARRITO * 100, 100
+  );
+
+  const estado = loading
+    ? "Procesando"
+    : items === 0
+      ? "Sin datos"
+      : "Listo para generar";
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <h3 className="text-sm font-semibold text-[#1e293b] mb-4 flex items-center gap-2">
-        <Package className="w-4 h-4 text-[#00ABE4]" />
+    <section className={`${CARD} p-4 md:p-5`}>
+      <h3 className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900">
+        <Package size={17} className="text-[#00ABE4]" />
         Resumen del lote
       </h3>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[#64748b]">Total items</span>
-          <span className="font-semibold text-[#1e293b]">{totalItems}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[#64748b]">Total trámites</span>
-          <span className="font-semibold text-[#1e293b]">{totalTramites}</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-[#64748b]">Máximo permitido</span>
-          <span className="font-medium text-[#64748b]">{MAX_CARRITO} items</span>
-        </div>
-
-        <div className="pt-1">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="text-[#94a3b8]">Uso del lote</span>
-            <span className="text-[#64748b] font-medium">{totalItems}/{MAX_CARRITO}</span>
+        {[
+          ["Total ítems", items],
+          ["Total trámites", tramites],
+          ["Máximo permitido", `${MAX_CARRITO} ítems`]
+        ].map(([label, valor]) => (
+          <div
+            key={label}
+            className="flex items-center justify-between gap-2 text-sm"
+          >
+            <span className="text-slate-500">{label}</span>
+            <strong className="text-slate-800">{valor}</strong>
           </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+        ))}
+
+        <div className="pt-2">
+          <div className="mb-2 flex justify-between text-xs">
+            <span className="text-slate-500">Uso del lote</span>
+            <span className="font-semibold text-slate-700">
+              {items}/{MAX_CARRITO}
+            </span>
+          </div>
+
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-[#00ABE4] to-[#0095C5]"
+              className="h-full rounded-full bg-gradient-to-r from-[#00ABE4] to-[#0095C5] transition-all"
               style={{ width: `${porcentaje}%` }}
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs pt-1">
-          <span className="text-[#64748b]">Estado</span>
-          <span className={`font-medium ${loading ? "text-amber-600" : totalItems === 0 ? "text-[#94a3b8]" : "text-emerald-600"}`}>
+        <div className="flex justify-between border-t border-slate-100 pt-3 text-xs">
+          <span className="text-slate-500">Estado</span>
+          <span className={`font-semibold ${
+            loading
+              ? "text-amber-600"
+              : items
+                ? "text-emerald-600"
+                : "text-slate-400"
+          }`}>
             {estado}
           </span>
         </div>
-      </div>
 
-      {loading && (
-        <div className="mt-4 pt-4 border-t border-slate-100">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="text-[#64748b] font-medium">Procesando</span>
-            <span className="text-[#00ABE4] font-semibold">{progreso.actual} / {progreso.total}</span>
-          </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-[#00ABE4] transition-all duration-300"
-              style={{ width: `${progreso.total > 0 ? (progreso.actual / progreso.total) * 100 : 0}%` }}
-            />
-          </div>
-        </div>
-      )}
+        {loading && progreso.total > 0 && (
+          <div>
+            <div className="mb-2 flex justify-between text-xs text-slate-600">
+              <span>Procesando</span>
+              <strong>
+                {progreso.actual}/{progreso.total}
+              </strong>
+            </div>
 
-      {attemptedSubmit && errores.length > 0 && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl">
-          <div className="flex items-start gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-red-600 space-y-0.5">
-              {errores.map((e, i) => (
-                <p key={i}>{e}</p>
-              ))}
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full bg-[#00ABE4] transition-all"
+                style={{
+                  width: `${
+                    Math.min(
+                      100,
+                      progreso.actual / progreso.total * 100
+                    )
+                  }%`
+                }}
+              />
             </div>
           </div>
+        )}
+      </div>
+
+      {attempted && errores.length > 0 && (
+        <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3">
+          {errores.map((e, i) => (
+            <p
+              key={i}
+              className="flex items-start gap-2 text-xs text-red-700"
+            >
+              <AlertCircle size={14} className="shrink-0" />
+              {e}
+            </p>
+          ))}
         </div>
       )}
 
       <button
-        onClick={onGenerar}
-        disabled={!puedeEnviar || totalItems === 0}
-        className="mt-5 w-full bg-[#00ABE4] hover:bg-[#0095C5] text-white px-4 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-semibold active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:hover:scale-100"
+        type="button"
+        disabled={!puedeEnviar}
+        onClick={generar}
+        className={`${PRIMARY} mt-5 min-h-[46px] w-full`}
       >
         {loading ? (
           <>
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 size={17} className="animate-spin" />
             Procesando...
           </>
         ) : (
           <>
-            <FileText className="w-4 h-4" />
-            Generar Todo
+            <ClipboardCheck size={17} />
+            Generar todo
           </>
         )}
       </button>
 
-      {totalItems > 0 && !loading && (
-        <p className="text-xs text-[#94a3b8] text-center mt-2.5">
-          Se generarán todas las liquidaciones agregadas al carrito.
+      {items > 0 && !loading && (
+        <p className="mt-2 text-center text-xs text-slate-400">
+          Se procesarán los ítems incluidos en el carrito.
         </p>
       )}
-    </div>
+    </section>
   );
 }
 
-function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
-  if (resultados.length === 0) return null;
+// ======================================================
+// RESULTADOS PERSONALIZADOS
+// ======================================================
 
-  const [page, setPage] = useState(1);
-  const itemsPerPage = 15;
-  const totalPages = Math.ceil(resultados.length / itemsPerPage);
-  useEffect(() => { if (page > totalPages) setPage(1); }, [resultados.length]);
-  const paginatedItems = resultados.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+function TablaResultados({ resultados, abrirPDF, imprimirTodos }) {
+  const [pagina, setPagina] = useState(1);
+
+  const totalPaginas = Math.max(
+    1, Math.ceil(resultados.length / POR_PAGINA)
+  );
+
+  useEffect(() => {
+    setPagina(p => Math.min(p, totalPaginas));
+  }, [totalPaginas]);
+
+  if (!resultados.length) return null;
+
+  const visibles = resultados.slice(
+    (pagina - 1) * POR_PAGINA,
+    pagina * POR_PAGINA
+  );
 
   const exitosas = resultados.filter(r => r.ok).length;
-  const fallidas = resultados.filter(r => !r.ok).length;
-  const todasExitosas = fallidas === 0;
+  const fallidas = resultados.length - exitosas;
+
+  const imprimibles = resultados.filter(
+    r => r.ok && r.data?.descarga?.fileName
+  ).length;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-[#1e293b]">Resultados</h3>
-          <div className="flex items-center gap-4 text-xs">
-            <span className="flex items-center gap-1 text-emerald-600 font-medium">
-              <CircleCheck size={14} />
-              {exitosas} exitosa{exitosas !== 1 ? "s" : ""}
+    <section className={`${CARD} p-4 md:p-5`}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-slate-900">
+            Resultados de liquidaciones
+          </h2>
+
+          <div className="mt-2 flex flex-wrap gap-3 text-xs">
+            <span className="flex items-center gap-1 font-semibold text-emerald-600">
+              <CheckCircle2 size={14} />
+              {exitosas} exitosas
             </span>
-            <span className="flex items-center gap-1 text-red-500 font-medium">
+
+            <span className="flex items-center gap-1 font-semibold text-red-600">
               <AlertCircle size={14} />
-              {fallidas} fallida{fallidas !== 1 ? "s" : ""}
+              {fallidas} fallidas
             </span>
           </div>
         </div>
 
-        {exitosas > 0 && (
+        {imprimibles > 0 && (
           <button
-            onClick={onImprimirTodos}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00ABE4]/10 hover:bg-[#00ABE4]/20 text-[#00ABE4] rounded-lg text-xs font-semibold transition-all duration-200"
-            title="Imprimir todos los PDFs"
+            type="button"
+            onClick={imprimirTodos}
+            className={`${BTN} bg-sky-50 text-[#0095C5] hover:bg-sky-100`}
           >
-            <Printer size={14} />
-            <span>Imprimir todos</span>
+            <Printer size={15} />
+            Imprimir todos
           </button>
         )}
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100">
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">#</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Documento</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Número</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Nombre</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Placa</th>
-              <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#94a3b8]">Estado</th>
-              <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#94a3b8]">Detalle</th>
-              <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#94a3b8]">PDF</th>
+        <table className="w-full min-w-[980px] text-sm">
+          <thead className="bg-[#E9F1FA]">
+            <tr>
+              {[
+                "#", "Documento", "Número", "Solicitante",
+                "Placa", "Estado", "Detalle", "PDF"
+              ].map(h => (
+                <th
+                  key={h}
+                  className="px-3 py-3 text-left text-xs font-semibold text-slate-600"
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
+
           <tbody>
-            {paginatedItems.map((r, i) => (
+            {visibles.map((r, i) => (
               <tr
-                key={i}
-                className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors"
+                key={`${r.tipoDocumento}-${r.numeroDocumento}-${r.placa}-${i}`}
+                className="border-b border-slate-100 hover:bg-sky-50/40"
               >
-                <td className="py-3 px-3 text-[#94a3b8] text-xs">{(page - 1) * itemsPerPage + i + 1}</td>
-                <td className="py-3 px-3 text-xs text-[#64748b]">
-                  {r.tipoDocumento ? labelTipoDoc(r.tipoDocumento) : "—"}
+                <td className="px-3 py-3 text-xs text-slate-400">
+                  {(pagina - 1) * POR_PAGINA + i + 1}
                 </td>
-                <td className="py-3 px-3">
-                  <span className="font-mono font-bold text-[#1e293b] text-sm">{r.numeroDocumento || "—"}</span>
+
+                <td className="px-3 py-3 text-xs text-slate-600">
+                  {labelTipoDoc(r.tipoDocumento) || "—"}
                 </td>
-                <td className="py-3 px-3 text-xs text-[#64748b] max-w-[150px] truncate">
+
+                <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                  {r.numeroDocumento || "—"}
+                </td>
+
+                <td
+                  className="max-w-[180px] truncate px-3 py-3 text-xs text-slate-600"
+                  title={r.nombreSolicitante || ""}
+                >
                   {r.nombreSolicitante || "—"}
                 </td>
-                <td className="py-3 px-3">
-                  <span className="font-mono font-bold text-[#1e293b] text-sm">{r.placa}</span>
+
+                <td className="px-3 py-3 font-mono font-bold text-slate-900">
+                  {r.placa}
                 </td>
-                <td className="py-3 px-3 text-center">
-                  {r.ok ? (
-                    <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium">
-                      <CheckCircle2 size={11} />
-                      Éxito
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 text-xs px-2.5 py-1 rounded-full font-medium">
-                      <AlertCircle size={11} />
-                      Error
-                    </span>
-                  )}
+
+                <td className="px-3 py-3">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${
+                    r.ok
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-red-50 text-red-700"
+                  }`}>
+                    {r.ok
+                      ? <CheckCircle2 size={13} />
+                      : <AlertCircle size={13} />}
+                    {r.ok ? "Éxito" : "Error"}
+                  </span>
                 </td>
-                <td className="py-3 px-3 text-xs text-[#64748b] max-w-[180px] truncate">
-                  {r.ok ? "Liquidación generada correctamente" : (r.error || "Error desconocido")}
+
+                <td className="max-w-[230px] px-3 py-3 text-xs text-slate-600">
+                  <span
+                    className="block truncate"
+                    title={
+                      r.ok
+                        ? "Liquidación generada"
+                        : r.error || ""
+                    }
+                  >
+                    {r.ok
+                      ? "Liquidación generada correctamente"
+                      : r.error || "Error desconocido"}
+                  </span>
                 </td>
-                <td className="py-3 px-3 text-center">
+
+                <td className="px-3 py-3">
                   {r.ok && r.data?.descarga?.fileName ? (
                     <button
-                      onClick={() => onAbrirPDF(r.data.descarga.fileName)}
-                      className="p-1.5 text-[#00ABE4] hover:bg-blue-50 rounded-lg transition-all"
+                      type="button"
                       title="Abrir PDF"
+                      onClick={() => abrirPDF(r.data.descarga.fileName)}
+                      className="rounded-lg p-2 text-[#0095C5] hover:bg-sky-50"
                     >
-                      <Download size={15} />
+                      <Download size={16} />
                     </button>
                   ) : (
-                    <span className="text-[#cbd5e1]">—</span>
+                    <span className="text-slate-300">—</span>
                   )}
                 </td>
               </tr>
@@ -546,26 +785,151 @@ function ResultsTable({ resultados, onAbrirPDF, onImprimirTodos }) {
         </table>
       </div>
 
-      <Pagination currentPage={page} totalItems={resultados.length} onPageChange={setPage} />
+      <Paginacion
+        pagina={pagina}
+        total={resultados.length}
+        cambiar={setPagina}
+      />
 
-      <div className="mt-4 p-3.5 bg-blue-50 border border-blue-100 rounded-xl">
-        <p className="text-xs text-blue-700 leading-relaxed">
-          {todasExitosas ? (
-            <>
-              <CheckCircle2 size={14} className="inline mr-1 text-emerald-500" />
-              Todas las liquidaciones se generaron correctamente. Los PDFs se abrieron en nuevas pestañas.
-            </>
-          ) : (
-            <>
-              <AlertTriangle size={14} className="inline mr-1 text-amber-500" />
-              {fallidas} item(s) fallaron. Revise los errores e intente de nuevo.
-            </>
-          )}
+      <div className={`mt-4 flex items-start gap-2 rounded-xl border p-3 ${
+        fallidas
+          ? "border-amber-200 bg-amber-50"
+          : "border-emerald-200 bg-emerald-50"
+      }`}>
+        {fallidas
+          ? <AlertTriangle size={16} className="shrink-0 text-amber-600" />
+          : <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />}
+
+        <p className={`text-xs ${
+          fallidas ? "text-amber-800" : "text-emerald-800"
+        }`}>
+          {fallidas
+            ? `${fallidas} ítem(s) presentaron errores. Revise los detalles antes de intentar nuevamente.`
+            : `Se generaron ${exitosas} liquidaciones correctamente. Puede abrir o imprimir los PDF disponibles.`}
         </p>
       </div>
-    </div>
+    </section>
   );
 }
+
+// ======================================================
+// CONFIRMACIÓN DETALLADA
+// ======================================================
+
+async function confirmarLote(carrito, totalTramites) {
+  const resumen = carrito.map(item => {
+    const tramites = item.tramites
+      .map(t => `${labelTramite(t.tramite)} (${t.clasificacion})`)
+      .join(", ");
+
+    return `
+      <div style="
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:12px;
+        padding:12px;
+        border-bottom:1px solid #e2e8f0;
+        text-align:left
+      ">
+        <div>
+          <strong style="display:block;font-size:12px;color:#0f172a">
+            ${escapeHtml(item.placa)}
+          </strong>
+          <span style="display:block;margin-top:3px;font-size:11px;color:#64748b">
+            ${escapeHtml(labelTipoDoc(item.tipoDocumento))}
+          </span>
+          <span style="display:block;font-size:11px;color:#64748b">
+            ${escapeHtml(item.numeroDocumento)}
+          </span>
+        </div>
+
+        <div style="font-size:11px;color:#475569;text-align:right">
+          ${escapeHtml(tramites)}
+        </div>
+      </div>`;
+  }).join("");
+
+  const resultado = await Swal.fire({
+    title: "Confirmar liquidaciones personalizadas",
+    icon: "info",
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif">
+        <p style="font-size:13px;color:#64748b;margin-bottom:16px">
+          Verifique documentos, placas, trámites y clasificaciones
+          antes de enviar el lote al procesamiento RUNT.
+        </p>
+
+        <div style="
+          display:grid;
+          grid-template-columns:1fr 1fr;
+          gap:10px;
+          margin-bottom:16px
+        ">
+          <div style="background:#E9F1FA;padding:14px;border-radius:12px">
+            <div style="font-size:12px;color:#64748b">
+              Ítems
+            </div>
+            <strong style="font-size:24px;color:#0095C5">
+              ${carrito.length}
+            </strong>
+          </div>
+
+          <div style="background:#E9F1FA;padding:14px;border-radius:12px">
+            <div style="font-size:12px;color:#64748b">
+              Trámites
+            </div>
+            <strong style="font-size:24px;color:#0095C5">
+              ${totalTramites}
+            </strong>
+          </div>
+        </div>
+
+        <div style="
+          max-height:250px;
+          overflow:auto;
+          border:1px solid #e2e8f0;
+          border-radius:12px
+        ">
+          ${resumen}
+        </div>
+
+        <div style="
+          margin-top:14px;
+          padding:12px;
+          background:#fffbeb;
+          border:1px solid #fde68a;
+          border-radius:10px;
+          text-align:left;
+          font-size:12px;
+          color:#92400e
+        ">
+          El solicitante debe estar inscrito en RUNT.
+          Compruebe el número de documento y la placa.
+          Para MEDIDAS CAUTELARES puede requerirse
+          confirmación manual en RUNT.
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Confirmar y generar",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#0095C5",
+    cancelButtonColor: "#64748b",
+    reverseButtons: true,
+    width: 600,
+    customClass: {
+      popup: "rounded-2xl",
+      confirmButton: "rounded-xl",
+      cancelButton: "rounded-xl"
+    }
+  });
+
+  return resultado.isConfirmed;
+}
+
+// ======================================================
+// COMPONENTE PRINCIPAL
+// ======================================================
 
 export default function LiquidarRuntPersonalizado() {
   const [tipoDocInput, setTipoDocInput] = useState("");
@@ -573,389 +937,562 @@ export default function LiquidarRuntPersonalizado() {
   const [placaInput, setPlacaInput] = useState("");
   const [tramiteActual, setTramiteActual] = useState("");
   const [clasificacionActual, setClasificacionActual] = useState("");
+
   const [carrito, setCarrito] = useState([]);
   const [loading, setLoading] = useState(false);
   const [resultados, setResultados] = useState([]);
-  const [progreso, setProgreso] = useState({ actual: 0, total: 0 });
-  const [ultimoKey, setUltimoKey] = useState("");
+  const [progreso, setProgreso] = useState({
+    actual: 0,
+    total: 0
+  });
+
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [jobActual, setJobActual] = useState(null);
   const [alarmaActiva, setAlarmaActiva] = useState(false);
 
-  const audioRef = useRef(new Audio(sonidoLiquidacion));
-  audioRef.current.loop = true;
+  const audioRef = useRef(null);
+  const finalizadoRef = useRef(null);
+  const enviandoRef = useRef(false);
 
-  const totalTramites = carrito.reduce((sum, item) => sum + item.tramites.length, 0);
+  const totalTramites = carrito.reduce(
+    (suma, item) => suma + item.tramites.length,
+    0
+  );
 
-  const iniciarAlarma = () => {
-    setAlarmaActiva(true);
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().catch(err => {
-      console.warn("No se pudo reproducir la alarma:", err);
-    });
-  };
+  const ocupado = loading || Boolean(jobActual);
 
-  const detenerAlarma = () => {
-    setAlarmaActiva(false);
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-  };
+  // --------------------------------------------------
+  // ALARMA
+  // --------------------------------------------------
 
   useEffect(() => {
-    const hayResultados = resultados.length > 0;
-    const terminado = !loading && !jobActual && hayResultados;
+    const audio = new Audio(sonidoLiquidacion);
+    audio.loop = true;
+    audioRef.current = audio;
 
-    if (terminado) {
-      iniciarAlarma();
-    } else {
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+      audioRef.current = null;
+    };
+  }, []);
+
+  const detenerAlarma = useCallback(() => {
+    setAlarmaActiva(false);
+
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, []);
+
+  const iniciarAlarma = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setAlarmaActiva(true);
+    audio.currentTime = 0;
+
+    audio.play().catch(() => {
+      setAlarmaActiva(false);
+    });
+  }, []);
+
+  // --------------------------------------------------
+  // AGREGAR ÍTEM
+  // --------------------------------------------------
+
+  const handleAgregar = () => {
+    if (ocupado) return;
+
+    const tipoDocumento = tipoDocInput.trim();
+    const numeroDocumento = numDocInput.trim();
+    const placa = placaInput.trim().toUpperCase();
+
+    if (!tipoDocumento) {
+      return toast.error("Seleccione un tipo de documento");
+    }
+
+    if (!numeroDocumento) {
+      return toast.error("Ingrese el número de documento");
+    }
+
+    if (!placa) {
+      return toast.error("Ingrese una placa");
+    }
+
+    if (!tramiteActual) {
+      return toast.error("Seleccione un trámite");
+    }
+
+    if (!clasificacionActual) {
+      return toast.error("Seleccione una clasificación");
+    }
+
+    const key = generarKey(tipoDocumento, numeroDocumento, placa);
+
+    const existente = carrito.find(item =>
+      generarKey(
+        item.tipoDocumento,
+        item.numeroDocumento,
+        item.placa
+      ) === key
+    );
+
+    // Si ya existe la combinación, agrega el nuevo trámite.
+    // Esto también funciona al alcanzar los 40 ítems.
+    if (existente) {
+      const clasificacionExistente =
+        existente.tramites[0]?.clasificacion;
+
+      if (clasificacionExistente !== clasificacionActual) {
+        return toast.error(
+          "Los trámites de una misma combinación deben compartir la clasificación"
+        );
+      }
+
+      if (existente.tramites.some(t => t.tramite === tramiteActual)) {
+        return toast.error(
+          "Este trámite ya está agregado para el documento y la placa"
+        );
+      }
+
+      setCarrito(prev => prev.map(item =>
+        item.id === existente.id
+          ? {
+              ...item,
+              tramites: [
+                ...item.tramites,
+                {
+                  tramite: tramiteActual,
+                  clasificacion: clasificacionActual
+                }
+              ]
+            }
+          : item
+      ));
+
+      setTramiteActual("");
+      setResultados([]);
       detenerAlarma();
-    }
-  }, [loading, jobActual, resultados.length]);
 
-  const generarKey = (tipoDoc, numDoc, placa) => `${tipoDoc}|${numDoc}|${placa}`;
-
-  const handleAgregarAlCarrito = () => {
-    if (!tipoDocInput.trim()) {
-      toast.error("Seleccione un tipo de documento");
+      toast.success(
+        `${labelTramite(tramiteActual)} agregado a ${placa}`
+      );
       return;
     }
-    if (!numDocInput.trim()) {
-      toast.error("Ingrese el número de documento");
-      return;
-    }
-    if (!placaInput.trim()) {
-      toast.error("Ingrese una placa");
-      return;
-    }
-    if (!tramiteActual.trim()) {
-      toast.error("Seleccione un trámite");
-      return;
-    }
-    if (!clasificacionActual.trim()) {
-      toast.error("Seleccione una clasificación");
-      return;
-    }
-
-    const placaUpper = placaInput.trim().toUpperCase();
-    const numDocTrim = numDocInput.trim();
-    const currentKey = generarKey(tipoDocInput, numDocTrim, placaUpper);
 
     if (carrito.length >= MAX_CARRITO) {
-      toast.error(`Máximo ${MAX_CARRITO} items en el carrito`);
-      return;
+      return toast.error(
+        `Máximo ${MAX_CARRITO} ítems por lote`
+      );
     }
 
-    if (currentKey === ultimoKey && carrito.length > 0) {
-      const ultimoItem = carrito[carrito.length - 1];
-
-      if (ultimoItem.tramites.length > 0 && ultimoItem.tramites[0].clasificacion !== clasificacionActual) {
-        toast.error("Todos los trámites de un item deben compartir la misma clasificación (flujo RUNT)");
-        return;
+    setCarrito(prev => [
+      ...prev,
+      {
+        id: uuidv4(),
+        tipoDocumento,
+        numeroDocumento,
+        placa,
+        tramites: [{
+          tramite: tramiteActual,
+          clasificacion: clasificacionActual
+        }]
       }
+    ]);
 
-      const yaExiste = ultimoItem.tramites.some(t => t.tramite === tramiteActual);
-      if (yaExiste) {
-        toast.error("Ese trámite ya está agregado para este item");
-        return;
-      }
-
-      setCarrito(prev => {
-        const nuevo = [...prev];
-        nuevo[nuevo.length - 1] = {
-          ...ultimoItem,
-          tramites: [...ultimoItem.tramites, { tramite: tramiteActual, clasificacion: clasificacionActual }]
-        };
-        return nuevo;
-      });
-
-      toast.success(`${labelTramite(tramiteActual)} agregado al item`);
-      setTramiteActual("");
-      return;
-    }
-
-    const existe = carrito.some(item =>
-      item.tipoDocumento === tipoDocInput &&
-      item.numeroDocumento === numDocTrim &&
-      item.placa === placaUpper
-    );
-    if (existe) {
-      toast.error("Esa combinación de documento + placa ya está en el carrito. Para agregar más trámites, use los mismos campos.");
-      return;
-    }
-
-    setCarrito(prev => [...prev, {
-      id: uuidv4(),
-      tipoDocumento: tipoDocInput,
-      numeroDocumento: numDocTrim,
-      placa: placaUpper,
-      tramites: [{ tramite: tramiteActual, clasificacion: clasificacionActual }]
-    }]);
-    setUltimoKey(currentKey);
     setTramiteActual("");
-    toast.success(`Item agregado al carrito`);
+    setResultados([]);
+    detenerAlarma();
+
+    toast.success(
+      `Liquidación personalizada agregada para ${placa}`
+    );
   };
 
-  const handleEliminarItem = (id) => {
+  // --------------------------------------------------
+  // ELIMINAR Y LIMPIAR
+  // --------------------------------------------------
+
+  const eliminarItem = id => {
+    if (ocupado) return;
+
     setCarrito(prev => prev.filter(item => item.id !== id));
-    if (ultimoKey === carrito.find(i => i.id === id)?.id) {
-      setUltimoKey("");
-    }
+    setResultados([]);
+    detenerAlarma();
   };
 
-  const handleLimpiarFormulario = () => {
+  const eliminarTramite = (id, index) => {
+    if (ocupado) return;
+
+    setCarrito(prev => prev
+      .map(item => {
+        if (item.id !== id) return item;
+
+        const tramites = item.tramites.filter(
+          (_, i) => i !== index
+        );
+
+        return tramites.length
+          ? { ...item, tramites }
+          : null;
+      })
+      .filter(Boolean)
+    );
+
+    setResultados([]);
+    detenerAlarma();
+  };
+
+  const limpiarFormulario = () => {
+    if (ocupado) return;
+
     setTipoDocInput("");
     setNumDocInput("");
     setPlacaInput("");
     setTramiteActual("");
     setClasificacionActual("");
-    setUltimoKey("");
-    detenerAlarma();
   };
 
-  const handleLimpiarCarrito = () => {
+  const limpiarCarrito = () => {
+    if (ocupado) return;
+
     setCarrito([]);
     setResultados([]);
     setAttemptedSubmit(false);
-    handleLimpiarFormulario();
+    limpiarFormulario();
+    detenerAlarma();
   };
 
-  const handleEliminarTramiteItem = (itemId, tramiteIndex) => {
-    setCarrito(prev => prev.map(item => {
-      if (item.id !== itemId) return item;
-      const nuevosTramites = item.tramites.filter((_, i) => i !== tramiteIndex);
-      if (nuevosTramites.length === 0) return null;
-      return { ...item, tramites: nuevosTramites };
-    }).filter(Boolean));
-  };
+  // --------------------------------------------------
+  // VALIDACIÓN DEL LOTE
+  // --------------------------------------------------
 
-  const obtenerErrores = () => {
-    const errores = [];
-    if (carrito.length === 0) errores.push("Agregue al menos un item al carrito");
-    for (const item of carrito) {
-      if (!item.tipoDocumento) errores.push(`Item tiene tipo de documento vacío`);
-      if (!item.numeroDocumento) errores.push(`Item tiene número de documento vacío`);
-      if (item.tramites.length === 0) errores.push(`Item sin trámites`);
+  const errores = [];
+
+  if (!carrito.length) {
+    errores.push("Agregue al menos un ítem al carrito");
+  }
+
+  carrito.forEach(item => {
+    if (!item.tipoDocumento) {
+      errores.push(`Falta tipo de documento para ${item.placa}`);
     }
-    return errores;
+
+    if (!item.numeroDocumento) {
+      errores.push(`Falta número de documento para ${item.placa}`);
+    }
+
+    if (!item.placa) {
+      errores.push("Hay un ítem sin placa");
+    }
+
+    if (!item.tramites.length) {
+      errores.push(`La placa ${item.placa} no tiene trámites`);
+    }
+  });
+
+  const puedeEnviar = !ocupado && errores.length === 0;
+
+  // --------------------------------------------------
+  // ABRIR E IMPRIMIR PDF
+  // --------------------------------------------------
+
+  const abrirPDF = fileName => {
+    if (!fileName) return;
+
+    const url = `${API_BASE}/descargar/${encodeURIComponent(fileName)}`;
+    const ventana = window.open(url, "_blank");
+
+    if (!ventana) {
+      toast.error(
+        "El navegador puede haber bloqueado la apertura del PDF"
+      );
+    }
   };
 
-  const errores = obtenerErrores();
-  const puedeEnviar = errores.length === 0 && !loading;
+  const imprimirTodos = () => {
+    const exitosos = resultados.filter(
+      r => r.ok && r.data?.descarga?.fileName
+    );
 
-  const abrirPDF = (fileName) => {
-    const url = `${API_BASE}/descargar/${fileName}`;
-    window.open(url, "_blank");
-  };
-
-  const handleImprimirTodos = () => {
-    const exitosos = resultados.filter(r => r.ok && r.data?.descarga?.fileName);
-    if (exitosos.length === 0) {
-      toast.error("No hay liquidaciones exitosas para imprimir");
-      return;
+    if (!exitosos.length) {
+      return toast.error(
+        "No hay liquidaciones exitosas para imprimir"
+      );
     }
 
     detenerAlarma();
 
-    const fileNames = exitosos.map(r => r.data.descarga.fileName);
-    const filesParam = encodeURIComponent(fileNames.join(','));
-    const url = `http://localhost:3000/api/liquidacion/imprimir-pdfs?files=${filesParam}`;
+    const nombres = exitosos.map(
+      r => r.data.descarga.fileName
+    );
 
-    window.open(url, "_blank");
-    toast.info("Se abrió la ventana de impresión local");
+    const files = encodeURIComponent(nombres.join(","));
+
+    // Mantiene la misma integración de impresión local.
+    const url =
+      `http://localhost:3000/api/liquidacion/imprimir-pdfs?files=${files}`;
+
+    const ventana = window.open(url, "_blank");
+
+    if (ventana) {
+      toast("Se solicitó la apertura de la ventana de impresión");
+    } else {
+      toast.error("El navegador bloqueó la ventana de impresión");
+    }
   };
 
-  const handleGenerarTodo = async () => {
+  // --------------------------------------------------
+  // GENERAR TODO
+  // --------------------------------------------------
+
+  const generarTodo = async () => {
+    if (enviandoRef.current || ocupado) return;
+
     setAttemptedSubmit(true);
+
     if (!puedeEnviar) {
       errores.forEach(e => toast.error(e));
       return;
     }
 
-    const { isConfirmed } = await Swal.fire({
-      title: "¿Confirmar envío?",
-      html: `Revise su liquidacion (Numero de documento y Placa). Debe estar inscrito en el RUNT.`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Sí, enviar",
-      cancelButtonText: "Cancelar",
-      confirmButtonColor: "#d33",
-    });
-    if (!isConfirmed) return;
+    const confirmado = await confirmarLote(
+      carrito,
+      totalTramites
+    );
+
+    if (!confirmado || enviandoRef.current) return;
+
+    enviandoRef.current = true;
 
     try {
       setLoading(true);
       setResultados([]);
-      setProgreso({ actual: 0, total: carrito.length });
+      detenerAlarma();
+      finalizadoRef.current = null;
 
+      setProgreso({
+        actual: 0,
+        total: carrito.length
+      });
+
+      // Contrato original del backend: no modificar nombres.
       const items = carrito.map(item => ({
         tipoDocumento: item.tipoDocumento,
         numeroDocumento: item.numeroDocumento,
         placa: item.placa,
         tramites: item.tramites,
-        fechaLiquidacion: new Date().toISOString().split("T")[0]
+        fechaLiquidacion: fechaHoy()
       }));
 
-      const resp = await crearJob("liquidaciones_personalizadas", items);
+      const respuesta = await crearJob(
+        "liquidaciones_personalizadas",
+        items
+      );
 
-      if (resp.job?.id_job) {
-        setJobActual(resp.job.id_job);
-        toast.success(`Trabajo creado con ${items.length} liquidación(es)`);
-      } else if (resp.jobs?.length > 0) {
-        setJobActual(resp.jobs[0].id_job);
-        toast.success(`Trabajo creado con ${items.length} liquidación(es)`);
-      } else {
-        throw new Error("No se recibió ID del trabajo");
+      const id =
+        respuesta.job?.id_job ||
+        respuesta.jobs?.[0]?.id_job;
+
+      if (!id) {
+        throw new Error("No se recibió el ID del trabajo");
       }
+
+      setJobActual(id);
+
+      toast.success(
+        `Trabajo creado para ${items.length} ítems`
+      );
     } catch (err) {
-      const mensaje = err.response?.data?.error || err.message || "Error de conexión";
-      toast.error(mensaje);
+      toast.error(
+        err.response?.data?.error ||
+        err.message ||
+        "Error creando las liquidaciones personalizadas"
+      );
     } finally {
       setLoading(false);
+      enviandoRef.current = false;
     }
   };
 
-  const procesarJobCompletado = async (jobId) => {
+  // --------------------------------------------------
+  // FINALIZACIÓN DEL JOB
+  // --------------------------------------------------
+
+  const procesarJobCompletado = async jobId => {
+    if (finalizadoRef.current === jobId) return;
+
+    finalizadoRef.current = jobId;
+
     try {
+      setLoading(true);
+
       const detalle = await obtenerDetalleJob(jobId);
       const items = detalle.items || [];
 
-      const resultadosArr = items.map((item, index) => ({
+      const nuevosResultados = items.map((item, index) => ({
         index,
         tipoDocumento: item.payload?.tipoDocumento || "—",
         numeroDocumento: item.payload?.numeroDocumento || "—",
-        nombreSolicitante: item.resultado?.data?.nombreSolicitante || item.resultado?.nombreSolicitante || null,
+        nombreSolicitante:
+          item.resultado?.data?.nombreSolicitante ||
+          item.resultado?.nombreSolicitante ||
+          null,
         placa: item.payload?.placa || "—",
         ok: item.estado === "exitoso",
         data: item.resultado?.data || item.resultado || null,
-        error: item.error || item.resultado?.error || null,
+        error:
+          item.error ||
+          item.resultado?.error ||
+          null,
         tramites: item.payload?.tramites || []
       }));
 
-      setResultados(resultadosArr);
-      setProgreso({ actual: items.length, total: items.length });
+      setResultados(nuevosResultados);
+      setProgreso({
+        actual: items.length,
+        total: items.length
+      });
 
-      const exitosos = resultadosArr.filter(r => r.ok);
-      const fallidos = resultadosArr.filter(r => !r.ok);
+      setJobActual(null);
 
-      if (fallidos.length === 0) {
-        toast.success(`${exitosos.length} liquidación(es) generada(s) exitosamente`);
+      const exitosas = nuevosResultados.filter(r => r.ok).length;
+      const fallidas = nuevosResultados.length - exitosas;
+
+      if (fallidas > 0) {
+        toast(`${exitosas} exitosas y ${fallidas} fallidas`);
       } else {
-        toast.success(`${exitosos.length} exitosas, ${fallidos.length} fallidas`);
+        toast.success(
+          `${exitosas} liquidaciones generadas correctamente`
+        );
+      }
+
+      if (nuevosResultados.length) {
+        iniciarAlarma();
       }
     } catch (err) {
-      toast.error("Error cargando resultados del trabajo");
-      console.error(err);
+      finalizadoRef.current = null;
+      console.error(
+        "Error cargando resultados personalizados:",
+        err
+      );
+
+      toast.error(
+        "No fue posible cargar los resultados del trabajo"
+      );
     } finally {
-      setJobActual(null);
       setLoading(false);
-      setProgreso({ actual: 0, total: 0 });
     }
   };
 
-  const tieneItems = carrito.length > 0;
-  const TARIFA_ALERT = (
-    "Tarifa automática: Se selecciona según trámite + clasificación. "
-    + "Para MEDIDAS CAUTELARES se mostrará un popup en el RUNT que debe aceptar manualmente. "
-    + `Máximo ${MAX_CARRITO} items por lote.`
-  );
+  // --------------------------------------------------
+  // INTERFAZ PRINCIPAL
+  // --------------------------------------------------
 
   return (
     <div className="min-h-screen bg-[#E9F1FA]">
       <Header />
 
-      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-4 md:space-y-5">
-
-        <PageHeader totalItems={carrito.length} totalTramites={totalTramites} />
-
-        {tieneItems && <AlertBanner message={TARIFA_ALERT} />}
-
-        <AddPlateCard
-          tipoDocInput={tipoDocInput}
-          setTipoDocInput={setTipoDocInput}
-          numDocInput={numDocInput}
-          setNumDocInput={setNumDocInput}
-          placaInput={placaInput}
-          setPlacaInput={setPlacaInput}
-          tramiteActual={tramiteActual}
-          setTramiteActual={setTramiteActual}
-          clasificacionActual={clasificacionActual}
-          setClasificacionActual={setClasificacionActual}
-          onAgregar={handleAgregarAlCarrito}
-          onBorrarCampos={handleLimpiarFormulario}
-          disabled={carrito.length >= MAX_CARRITO || loading}
+      <div className="mx-auto max-w-6xl space-y-4 px-4 pb-6 pt-2 md:px-6">
+        <PageHeader
+          totalItems={carrito.length}
+          totalTramites={totalTramites}
         />
 
-        {tieneItems ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
-            <div className="lg:col-span-2 space-y-4 md:space-y-5">
-              <CartTable
+        <Formulario
+          tipoDoc={tipoDocInput}
+          setTipoDoc={setTipoDocInput}
+          numeroDoc={numDocInput}
+          setNumeroDoc={setNumDocInput}
+          placa={placaInput}
+          setPlaca={setPlacaInput}
+          tramite={tramiteActual}
+          setTramite={setTramiteActual}
+          clasificacion={clasificacionActual}
+          setClasificacion={setClasificacionActual}
+          agregar={handleAgregar}
+          limpiar={limpiarFormulario}
+          disabled={ocupado}
+        />
+
+        <AvisoTarifas />
+
+        {carrito.length ? (
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+            <div className="space-y-4 lg:col-span-2">
+              <Carrito
                 items={carrito}
                 totalTramites={totalTramites}
-                onEliminarItem={handleEliminarItem}
-                onEliminarTramite={handleEliminarTramiteItem}
-                onLimpiarTodo={handleLimpiarCarrito}
+                eliminar={eliminarItem}
+                eliminarTramite={eliminarTramite}
+                limpiar={limpiarCarrito}
+                disabled={ocupado}
               />
 
               {jobActual && (
                 <JobProgress
                   jobId={jobActual}
                   onClose={() => setJobActual(null)}
-                  onComplete={() => procesarJobCompletado(jobActual)}
+                  onComplete={() =>
+                    procesarJobCompletado(jobActual)
+                  }
                 />
               )}
 
               {alarmaActiva && (
-                <div className="bg-amber-100 border-2 border-amber-400 rounded-2xl p-4 flex items-center justify-between animate-pulse">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4">
                   <div className="flex items-center gap-3">
-                    <Volume2 className="w-6 h-6 text-amber-600" />
+                    <Volume2
+                      size={22}
+                      className="text-amber-600"
+                    />
+
                     <div>
-                      <p className="text-sm font-bold text-amber-800">¡Proceso finalizado!</p>
-                      <p className="text-xs text-amber-700">Las liquidaciones están listas para imprimir.</p>
+                      <p className="text-sm font-bold text-amber-900">
+                        Proceso finalizado
+                      </p>
+
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        Revise los resultados y los PDF disponibles.
+                      </p>
                     </div>
                   </div>
+
                   <button
+                    type="button"
                     onClick={detenerAlarma}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-all"
+                    className={`${BTN} bg-amber-600 text-white hover:bg-amber-700`}
                   >
-                    <VolumeX size={14} />
+                    <VolumeX size={15} />
                     Silenciar alarma
                   </button>
                 </div>
               )}
 
-              <ResultsTable
+              <TablaResultados
                 resultados={resultados}
-                onAbrirPDF={abrirPDF}
-                onImprimirTodos={handleImprimirTodos}
+                abrirPDF={abrirPDF}
+                imprimirTodos={imprimirTodos}
               />
             </div>
 
-            <div className="space-y-4 md:space-y-5">
-              <BatchSummary
-                totalItems={carrito.length}
-                totalTramites={totalTramites}
-                loading={loading}
-                progreso={progreso}
-                onGenerar={handleGenerarTodo}
-                puedeEnviar={puedeEnviar}
-                attemptedSubmit={attemptedSubmit}
-                errores={errores}
-              />
-
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <AlertBanner message={TARIFA_ALERT} />
-              </div>
-            </div>
+            <ResumenLote
+              items={carrito.length}
+              tramites={totalTramites}
+              loading={ocupado}
+              progreso={progreso}
+              generar={generarTodo}
+              puedeEnviar={puedeEnviar}
+              errores={errores}
+              attempted={attemptedSubmit}
+            />
           </div>
         ) : (
-          <div className="space-y-4 md:space-y-5">
-            <EmptyCart />
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-              <AlertBanner message={TARIFA_ALERT} />
-            </div>
-          </div>
+          <CarritoVacio />
         )}
-
       </div>
     </div>
   );

@@ -1,6 +1,13 @@
-import { useState, useEffect } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import PageHeroHeader from "../components/PageHeroHeader";
+import Swal from "sweetalert2";
+import {
+  Printer, Save, TestTube, Plus, Trash2, ScanSearch,
+  CheckCircle2, RefreshCw, Loader2, Settings2, AlertTriangle,
+  Wifi, Search, X, CircleCheck, Info
+} from "lucide-react";
+
 import {
   obtenerConfigImpresora,
   guardarConfigImpresora,
@@ -10,392 +17,1007 @@ import {
   eliminarImpresora,
   activarImpresora
 } from "../services/configApi";
+
 import { API_BASE } from "../services/liquidacionApi";
-import { Printer, Save, TestTube, Plus, Trash2, ScanSearch } from "lucide-react";
+
+// ======================================================
+// CONFIGURACIÓN Y ESTILOS
+// ======================================================
+
+const CARD = "rounded-2xl border border-slate-200 bg-white shadow-sm";
+
+const BTN = "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm";
+
+const PRIMARY = `${BTN} bg-[#00ABE4] text-white hover:bg-[#0095C5]`;
+const OUTLINE = `${BTN} border border-slate-200 bg-white text-slate-600 hover:bg-slate-50`;
+
+const INPUT = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#00ABE4] focus:ring-2 focus:ring-sky-100";
+
+const normalizar = valor => String(valor || "").trim().toLocaleLowerCase("es-CO");
+
+const errorApi = (error, mensaje) =>
+  error?.response?.data?.error || error?.message || mensaje;
+
+const respuestaFallida = (resp, mensaje) => {
+  if (resp?.ok === false) {
+    throw new Error(resp.error || resp.message || mensaje);
+  }
+  return resp;
+};
+
+// ======================================================
+// INDICADORES
+// ======================================================
+
+function Indicador({ titulo, valor, icono: Icon, tipo = "blue" }) {
+  const colores = {
+    blue: "bg-sky-50 text-[#0095C5]",
+    green: "bg-emerald-50 text-emerald-600",
+    amber: "bg-amber-50 text-amber-600"
+  };
+
+  return (
+    <div className={`${CARD} flex min-w-0 items-center gap-3 p-4`}>
+      <div className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex ${colores[tipo]}`}>
+        <Icon size={21} />
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-xs text-slate-500">{titulo}</p>
+        <p className="mt-1 truncate text-base font-bold text-slate-900 md:text-lg" title={String(valor)}>
+          {valor}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ======================================================
+// VISTA PRINCIPAL
+// ======================================================
 
 export default function ConfiguracionImpresora() {
   const [printerName, setPrinterName] = useState("");
   const [autoPrint, setAutoPrint] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [autoPrintGuardado, setAutoPrintGuardado] = useState(false);
 
   const [impresoras, setImpresoras] = useState([]);
   const [activa, setActiva] = useState("");
   const [selectedPrinterId, setSelectedPrinterId] = useState("");
+
   const [nuevaImpresora, setNuevaImpresora] = useState("");
   const [disponibles, setDisponibles] = useState([]);
+  const [mostrarDisponibles, setMostrarDisponibles] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [detectando, setDetectando] = useState(false);
   const [agregando, setAgregando] = useState(false);
-  const [mostrarDisponibles, setMostrarDisponibles] = useState(false);
+  const [eliminandoId, setEliminandoId] = useState(null);
 
-  const cargarTodo = async () => {
-    const [configResp, listaResp] = await Promise.all([
-      obtenerConfigImpresora(),
-      listarImpresoras()
-    ]);
+  const ocupado = saving || testing || detectando || agregando || eliminandoId !== null;
 
-    if (configResp.ok && configResp.data) {
-      setPrinterName(configResp.data.printer_name || "");
-      setAutoPrint(configResp.data.auto_print || false);
-    }
+  // --------------------------------------------------
+  // CARGAR CONFIGURACIÓN
+  // --------------------------------------------------
 
-    if (listaResp.ok && listaResp.data) {
-      setImpresoras(listaResp.data.impresoras || []);
-      setActiva(listaResp.data.activa || "");
-      const activaEnLista = (listaResp.data.impresoras || []).find(
-        p => p.nombre === (listaResp.data.activa || "")
+  const cargarTodo = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const [configResp, listaResp] = await Promise.all([
+        obtenerConfigImpresora(),
+        listarImpresoras()
+      ]);
+
+      respuestaFallida(configResp, "Error consultando configuración");
+      respuestaFallida(listaResp, "Error consultando impresoras");
+
+      const config = configResp?.data || {};
+      const lista = listaResp?.data || {};
+
+      const registradas = Array.isArray(lista.impresoras)
+        ? lista.impresoras
+        : [];
+
+      const nombreActivo = lista.activa || config.printer_name || "";
+
+      setPrinterName(config.printer_name || "");
+      setAutoPrint(Boolean(config.auto_print));
+      setAutoPrintGuardado(Boolean(config.auto_print));
+      setImpresoras(registradas);
+      setActiva(nombreActivo);
+
+      const seleccionada = registradas.find(
+        p => p.nombre === nombreActivo
       );
-      setSelectedPrinterId(activaEnLista ? String(activaEnLista.id) : "");
-    }
-  };
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await cargarTodo();
-      } catch {
-        toast.error("Error cargando configuración");
-      } finally {
-        setLoading(false);
-      }
-    })();
+      setSelectedPrinterId(
+        seleccionada ? String(seleccionada.id) : ""
+      );
+    } catch (error) {
+      console.error("Error cargando configuración:", error);
+      toast.error(errorApi(error, "Error cargando configuración"));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    cargarTodo();
+  }, [cargarTodo]);
+
   const recargarLista = async () => {
-    const listaResp = await listarImpresoras();
-    if (listaResp.ok && listaResp.data) {
-      setImpresoras(listaResp.data.impresoras || []);
-      setActiva(listaResp.data.activa || "");
-    }
+    const resp = await listarImpresoras();
+    respuestaFallida(resp, "No se pudieron cargar las impresoras");
+
+    const lista = Array.isArray(resp?.data?.impresoras)
+      ? resp.data.impresoras
+      : [];
+
+    const activaActual = resp?.data?.activa || "";
+
+    setImpresoras(lista);
+    setActiva(activaActual);
+
+    setSelectedPrinterId(actual => {
+      if (actual && lista.some(p => String(p.id) === actual)) {
+        return actual;
+      }
+
+      const seleccionada = lista.find(
+        p => p.nombre === activaActual
+      );
+
+      return seleccionada ? String(seleccionada.id) : "";
+    });
+
+    return lista;
   };
 
+  // --------------------------------------------------
+  // ESTADÍSTICAS Y FILTROS
+  // --------------------------------------------------
+
+  const seleccionada = useMemo(
+    () => impresoras.find(
+      p => String(p.id) === selectedPrinterId
+    ),
+    [impresoras, selectedPrinterId]
+  );
+
+  const impresorasFiltradas = useMemo(() => {
+    const texto = normalizar(busqueda);
+
+    return impresoras.filter(p =>
+      normalizar(p.nombre).includes(texto)
+    );
+  }, [impresoras, busqueda]);
+
+  const hayCambios = Boolean(
+    autoPrint !== autoPrintGuardado ||
+    (seleccionada && seleccionada.nombre !== activa)
+  );
+
+  // --------------------------------------------------
+  // GUARDAR
+  // --------------------------------------------------
+
   const handleGuardar = async () => {
+    if (ocupado) return;
+
+    const nombreFinal = seleccionada?.nombre || printerName;
+
+    if (!nombreFinal) {
+      toast.error("Seleccione una impresora antes de guardar");
+      return;
+    }
+
     try {
       setSaving(true);
 
-      const seleccionada = impresoras.find(p => String(p.id) === String(selectedPrinterId));
-      const nombreFinal = seleccionada ? seleccionada.nombre : printerName;
-
+      // Mantiene los dos servicios del flujo original.
       if (seleccionada) {
-        await activarImpresora(seleccionada.id);
+        const respActivacion = await activarImpresora(
+          seleccionada.id
+        );
+
+        respuestaFallida(
+          respActivacion,
+          "No se pudo activar la impresora"
+        );
       }
 
-      await guardarConfigImpresora({
+      const respGuardar = await guardarConfigImpresora({
         printer_name: nombreFinal,
         auto_print: autoPrint
       });
 
+      respuestaFallida(
+        respGuardar,
+        "No se pudo guardar la configuración"
+      );
+
       setPrinterName(nombreFinal);
       setActiva(nombreFinal);
+      setAutoPrintGuardado(autoPrint);
+
+      await recargarLista();
+
       toast.success("Configuración guardada correctamente");
-    } catch {
-      toast.error("Error guardando configuración");
+    } catch (error) {
+      console.error("Error guardando impresora:", error);
+
+      toast.error(
+        errorApi(error, "Error guardando configuración")
+      );
     } finally {
       setSaving(false);
     }
   };
 
+  // --------------------------------------------------
+  // PRUEBA DEL SERVICIO DE IMPRESIÓN
+  // --------------------------------------------------
+
   const handleProbarImpresion = async () => {
+    if (ocupado) return;
+
+    if (!activa && !printerName) {
+      toast.error("Configure primero una impresora");
+      return;
+    }
+
     try {
       setTesting(true);
+
       const resp = await fetch(`${API_BASE}/imprimir-pdfs`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileNames: [] })
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          fileNames: []
+        })
       });
-      const data = await resp.json();
-      if (data.fallidas === 0) {
-        toast.success("Prueba de impresión exitosa");
-      } else {
-        toast.error(`Falló: ${data.errores?.[0] || "Sin impresoras disponibles"}`);
+
+      let data = {};
+
+      try {
+        data = await resp.json();
+      } catch {
+        // Algunos servidores no devuelven JSON.
       }
-    } catch (err) {
-      toast.error("No se pudo conectar al servidor");
+
+      if (!resp.ok || data.ok === false || Number(data.fallidas || 0) > 0) {
+        throw new Error(
+          data.errores?.[0] ||
+          data.error ||
+          `Error del servicio (${resp.status})`
+        );
+      }
+
+      toast.success(
+        "Servicio de impresión respondió correctamente. No se imprimió una hoja de prueba."
+      );
+    } catch (error) {
+      console.error("Error probando impresión:", error);
+
+      toast.error(
+        error.message || "No se pudo conectar al servicio de impresión"
+      );
     } finally {
       setTesting(false);
     }
   };
 
+  // --------------------------------------------------
+  // AGREGAR IMPRESORA MANUAL
+  // --------------------------------------------------
+
   const handleAgregarManual = async () => {
+    if (ocupado) return;
+
     const nombre = nuevaImpresora.trim();
+
     if (!nombre) {
       toast.error("Escriba el nombre de la impresora");
       return;
     }
 
+    if (impresoras.some(
+      p => normalizar(p.nombre) === normalizar(nombre)
+    )) {
+      toast.error("Esta impresora ya está registrada");
+      return;
+    }
+
     try {
       setAgregando(true);
-      await agregarImpresora(nombre);
+
+      const resp = await agregarImpresora(nombre);
+
+      respuestaFallida(
+        resp,
+        "No se pudo agregar la impresora"
+      );
+
       setNuevaImpresora("");
       await recargarLista();
-      toast.success(`Impresora "${nombre}" agregada`);
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error agregando impresora");
+
+      toast.success(`Impresora "${nombre}" agregada correctamente`);
+    } catch (error) {
+      console.error("Error agregando impresora:", error);
+
+      toast.error(
+        errorApi(error, "Error agregando impresora")
+      );
     } finally {
       setAgregando(false);
     }
   };
 
-  const handleAgregarDisponible = async (nombre) => {
+  // --------------------------------------------------
+  // AGREGAR IMPRESORA DETECTADA
+  // --------------------------------------------------
+
+  const handleAgregarDisponible = async nombre => {
+    if (ocupado) return;
+
+    if (impresoras.some(
+      p => normalizar(p.nombre) === normalizar(nombre)
+    )) {
+      toast.error("La impresora ya está registrada");
+      return;
+    }
+
     try {
       setAgregando(true);
-      await agregarImpresora(nombre);
-      await recargarLista();
+
+      const resp = await agregarImpresora(nombre);
+
+      respuestaFallida(
+        resp,
+        "No se pudo registrar la impresora"
+      );
+
+      const actualizadas = await recargarLista();
+
+      setDisponibles(prev => prev.filter(
+        n => normalizar(n) !== normalizar(nombre) &&
+          !actualizadas.some(
+            p => normalizar(p.nombre) === normalizar(n)
+          )
+      ));
+
       toast.success(`Impresora "${nombre}" agregada`);
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error agregando impresora");
+    } catch (error) {
+      console.error("Error registrando impresora:", error);
+
+      toast.error(
+        errorApi(error, "Error registrando impresora")
+      );
     } finally {
       setAgregando(false);
     }
   };
 
+  // --------------------------------------------------
+  // DETECTAR IMPRESORAS DE WINDOWS
+  // --------------------------------------------------
+
   const handleDetectar = async () => {
+    if (ocupado) return;
+
     try {
       setDetectando(true);
+
       const resp = await listarImpresorasDisponibles();
-      if (resp.ok) {
-        const registradas = new Set(impresoras.map(p => p.nombre));
-        const nuevas = (resp.data || []).filter(d => !registradas.has(d));
-        setDisponibles(nuevas);
-        setMostrarDisponibles(true);
-        if (nuevas.length === 0) {
-          toast.info("Todas las impresoras instaladas ya están registradas");
-        }
+
+      respuestaFallida(
+        resp,
+        "No se pudieron detectar impresoras"
+      );
+
+      const detectadas = Array.isArray(resp?.data)
+        ? resp.data
+        : [];
+
+      const registradas = new Set(
+        impresoras.map(p => normalizar(p.nombre))
+      );
+
+      const nuevas = [
+        ...new Set(
+          detectadas
+            .filter(n => typeof n === "string" && n.trim())
+            .filter(n => !registradas.has(normalizar(n)))
+        )
+      ];
+
+      setDisponibles(nuevas);
+      setMostrarDisponibles(true);
+
+      if (!nuevas.length) {
+        toast(
+          "No hay impresoras nuevas para registrar"
+        );
       }
-    } catch {
-      toast.error("No se pudieron detectar impresoras");
+    } catch (error) {
+      console.error("Error detectando impresoras:", error);
+
+      toast.error(
+        errorApi(error, "No se pudieron detectar impresoras")
+      );
     } finally {
       setDetectando(false);
     }
   };
 
-  const handleEliminar = async (id, nombre) => {
+  // --------------------------------------------------
+  // ELIMINAR CON CONFIRMACIÓN
+  // --------------------------------------------------
+
+  const handleEliminar = async impresora => {
+    if (ocupado) return;
+
+    const esActiva = impresora.nombre === activa;
+
+    const confirmar = await Swal.fire({
+      title: "Eliminar impresora",
+      text: esActiva
+        ? `La impresora "${impresora.nombre}" está activa. Si la elimina, deberá configurar otra impresora para continuar imprimiendo.`
+        : `¿Desea eliminar la impresora "${impresora.nombre}" de la lista de registradas?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Eliminar impresora",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#DC2626",
+      cancelButtonColor: "#64748B",
+      reverseButtons: true,
+      customClass: {
+        popup: "rounded-2xl",
+        confirmButton: "rounded-xl",
+        cancelButton: "rounded-xl"
+      }
+    });
+
+    if (!confirmar.isConfirmed) return;
+
     try {
-      await eliminarImpresora(id);
-      await recargarLista();
-      if (activa === nombre) {
+      setEliminandoId(impresora.id);
+
+      const resp = await eliminarImpresora(impresora.id);
+
+      respuestaFallida(
+        resp,
+        "No se pudo eliminar la impresora"
+      );
+
+      if (esActiva) {
         setActiva("");
+        setPrinterName("");
+        setSelectedPrinterId("");
+      } else if (String(impresora.id) === selectedPrinterId) {
         setSelectedPrinterId("");
       }
-      toast.success(`Impresora "${nombre}" eliminada`);
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Error eliminando impresora");
+
+      await recargarLista();
+
+      toast.success(
+        `Impresora "${impresora.nombre}" eliminada`
+      );
+    } catch (error) {
+      console.error("Error eliminando impresora:", error);
+
+      toast.error(
+        errorApi(error, "Error eliminando impresora")
+      );
+    } finally {
+      setEliminandoId(null);
     }
   };
 
+  // ====================================================
+  // CARGANDO
+  // ====================================================
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-[#00ABE4] border-t-transparent rounded-full animate-spin" />
+      <div className="flex min-h-[350px] flex-col items-center justify-center gap-3">
+        <Loader2
+          size={30}
+          className="animate-spin text-[#00ABE4]"
+        />
+        <p className="text-sm text-slate-500">
+          Cargando configuración de impresoras...
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="w-full max-w-2xl space-y-5">
-        <PageHeroHeader
-          label="Configuración"
-          labelIcon={Printer}
-          title="Configuración de impresora"
-          description="Registre sus impresoras y seleccione cuál usar para la impresión automática de liquidaciones RUNT."
-          icon={Printer}
-        />
+    <div className="min-h-screen bg-[#E9F1FA] px-4 pb-6 pt-2 md:px-6">
+      <div className="mx-auto max-w-5xl space-y-4">
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Printer className="w-5 h-5 text-[#00ABE4]" />
-            <h3 className="text-sm font-semibold text-[#1e293b]">
-              Datos de la impresora
-            </h3>
+        {/* ENCABEZADO */}
+
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#00ABE4] to-[#0095C5] px-6 py-5 text-white shadow-lg md:px-8">
+          <Printer
+            size={110}
+            className="pointer-events-none absolute right-6 top-1/2 hidden -translate-y-1/2 opacity-15 md:block"
+          />
+
+          <div className="relative z-10">
+            <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-sky-100">
+              <Settings2 size={15} />
+              CONFIGURACIÓN
+            </p>
+
+            <h1 className="mt-2 text-2xl font-bold tracking-tight md:text-3xl">
+              Configuración de impresoras
+            </h1>
+
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-sky-50">
+              Administra tus impresoras y configura la impresión
+              de liquidaciones RUNT.
+            </p>
           </div>
+        </section>
 
-          <div className="space-y-5">
-            {/* Dropdown de impresora activa */}
-            <div>
-              <label className="block text-xs font-semibold text-[#64748b] mb-1.5">
-                Impresora activa
+        {/* INDICADORES */}
+
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Indicador
+            titulo="Impresoras registradas"
+            valor={impresoras.length}
+            icono={Printer}
+            tipo="blue"
+          />
+
+          <Indicador
+            titulo="Impresora activa"
+            valor={activa || "Sin configurar"}
+            icono={CheckCircle2}
+            tipo="green"
+          />
+
+          <Indicador
+            titulo="Autoimpresión"
+            valor={autoPrintGuardado ? "Activada" : "Desactivada"}
+            icono={Wifi}
+            tipo="amber"
+          />
+        </section>
+
+        {/* CONFIGURACIÓN PRINCIPAL */}
+
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+
+          <div className="space-y-4 lg:col-span-2">
+
+            {/* SELECCIONAR IMPRESORA */}
+
+            <section className={`${CARD} p-4 md:p-5`}>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                    <Printer size={17} className="text-[#00ABE4]" />
+                    Seleccionar impresora
+                  </h2>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Seleccione la impresora que utilizará AutoCore.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={cargarTodo}
+                  disabled={ocupado}
+                  className={OUTLINE}
+                >
+                  <RefreshCw size={15} />
+                  Actualizar
+                </button>
+              </div>
+
+              <label className="mb-2 block text-xs font-semibold text-slate-600">
+                Impresora predeterminada
               </label>
+
               <select
                 value={selectedPrinterId}
-                onChange={(e) => setSelectedPrinterId(e.target.value)}
-                className="
-                  w-full px-4 py-3 rounded-xl border-2 border-slate-200
-                  text-sm text-[#1e293b] bg-white
-                  focus:outline-none focus:border-[#00ABE4] focus:ring-4 focus:ring-[#00ABE4]/10
-                  transition-all duration-200
-                "
+                disabled={ocupado || !impresoras.length}
+                onChange={e =>
+                  setSelectedPrinterId(e.target.value)
+                }
+                className={INPUT}
               >
-                <option value="">— Seleccione una impresora —</option>
+                <option value="">
+                  Seleccione una impresora
+                </option>
+
                 {impresoras.map(p => (
-                  <option key={p.id} value={String(p.id)}>
-                    {p.nombre}{p.nombre === activa ? "  (Activa)" : ""}
+                  <option
+                    key={p.id}
+                    value={String(p.id)}
+                  >
+                    {p.nombre}
+                    {p.nombre === activa ? " (Activa)" : ""}
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-[#94a3b8] mt-1.5">
-                Esta será la impresora que se usará al imprimir. Selecciónela y presione "Guardar configuración".
-              </p>
-            </div>
 
-            {/* Lista de impresoras registradas */}
-            <div>
-              <p className="block text-xs font-semibold text-[#64748b] mb-1.5">
-                Impresoras registradas ({impresoras.length})
-              </p>
-              {impresoras.length === 0 ? (
-                <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs text-[#94a3b8]">
-                  No hay impresoras registradas. Agregue una manualmente o detecte las de Windows.
+              <div className="mt-3 flex items-start gap-2 rounded-xl bg-sky-50 p-3">
+                <Info
+                  size={16}
+                  className="mt-0.5 shrink-0 text-[#0095C5]"
+                />
+
+                <p className="text-xs leading-relaxed text-slate-600">
+                  Seleccione una impresora y guarde los cambios para
+                  establecerla como activa.
+                </p>
+              </div>
+            </section>
+
+            {/* IMPRESORAS REGISTRADAS */}
+
+            <section className={`${CARD} p-4 md:p-5`}>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">
+                    Impresoras registradas
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {impresoras.length} impresoras en AutoCore
+                  </p>
+                </div>
+
+                <div className="relative w-full sm:w-56">
+                  <Search
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    type="text"
+                    value={busqueda}
+                    onChange={e => setBusqueda(e.target.value)}
+                    placeholder="Buscar impresora..."
+                    className={`${INPUT} !h-10 pl-9 pr-9 text-xs`}
+                  />
+
+                  {busqueda && (
+                    <button
+                      type="button"
+                      onClick={() => setBusqueda("")}
+                      aria-label="Limpiar búsqueda"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {!impresorasFiltradas.length ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                  <Printer
+                    size={28}
+                    className="mx-auto mb-3 text-slate-300"
+                  />
+
+                  <p className="text-sm font-medium text-slate-600">
+                    {impresoras.length
+                      ? "No se encontraron impresoras"
+                      : "No hay impresoras registradas"}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    {impresoras.length
+                      ? "Intente con otro nombre"
+                      : "Agregue una manualmente o detecte las de Windows"}
+                  </p>
                 </div>
               ) : (
-                <ul className="space-y-2">
-                  {impresoras.map(p => (
-                    <li
-                      key={p.id}
-                      className="flex items-center justify-between gap-2 px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Printer size={15} className="text-[#00ABE4] flex-shrink-0" />
-                        <span className="text-sm text-[#1e293b] truncate">{p.nombre}</span>
-                        {p.nombre === activa && (
-                          <span className="flex-shrink-0 bg-emerald-50 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                            Activa
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => handleEliminar(p.id, p.nombre)}
-                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
-                        title={`Eliminar ${p.nombre}`}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                <div className="space-y-2">
+                  {impresorasFiltradas.map(p => {
+                    const esActiva = p.nombre === activa;
+                    const esSeleccionada =
+                      String(p.id) === selectedPrinterId;
 
-            {/* Agregar manual */}
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <label className="block text-xs font-semibold text-[#64748b] mb-1.5">
-                  Agregar impresora
-                </label>
+                    return (
+                      <div
+                        key={p.id}
+                        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 transition-colors ${
+                          esSeleccionada
+                            ? "border-sky-200 bg-sky-50/50"
+                            : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                            esActiva
+                              ? "bg-emerald-50 text-emerald-600"
+                              : "bg-slate-100 text-slate-500"
+                          }`}>
+                            <Printer size={19} />
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {p.nombre}
+                            </p>
+
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {esActiva && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                  <CircleCheck size={11} />
+                                  Activa
+                                </span>
+                              )}
+
+                              {esSeleccionada && !esActiva && (
+                                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-[#0095C5]">
+                                  Seleccionada
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={ocupado}
+                          title={`Eliminar ${p.nombre}`}
+                          onClick={() => handleEliminar(p)}
+                          className="rounded-lg bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
+                        >
+                          {eliminandoId === p.id ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* AGREGAR MANUAL Y DETECTAR */}
+
+            <section className={`${CARD} p-4 md:p-5`}>
+              <div className="mb-4">
+                <h2 className="text-sm font-bold text-slate-900">
+                  Agregar impresoras
+                </h2>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Registre una impresora manualmente o detecte las
+                  instaladas en Windows.
+                </p>
+              </div>
+
+              <label className="mb-2 block text-xs font-semibold text-slate-600">
+                Nombre de la impresora
+              </label>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   value={nuevaImpresora}
-                  onChange={(e) => setNuevaImpresora(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleAgregarManual(); }}
-                  placeholder="Nombre exacto de la impresora"
-                  className="
-                    w-full px-4 py-3 rounded-xl border-2 border-slate-200
-                    text-sm text-[#1e293b] placeholder:text-[#94a3b8]
-                    focus:outline-none focus:border-[#00ABE4] focus:ring-4 focus:ring-[#00ABE4]/10
-                    transition-all duration-200
-                  "
+                  disabled={ocupado}
+                  onChange={e =>
+                    setNuevaImpresora(e.target.value)
+                  }
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAgregarManual();
+                    }
+                  }}
+                  placeholder="Nombre exacto en Windows"
+                  className={INPUT}
                 />
-              </div>
-              <button
-                onClick={handleAgregarManual}
-                disabled={agregando}
-                className="flex items-center gap-2 px-4 py-3 bg-[#00ABE4] hover:bg-[#0095C5] text-white rounded-xl text-sm font-semibold transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-4 h-4" />
-                Agregar
-              </button>
-            </div>
 
-            {/* Detectar impresoras de Windows */}
-            <div className="pt-2 border-t border-slate-100">
-              <button
-                onClick={handleDetectar}
-                disabled={detectando}
-                className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-[#64748b] rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50"
-              >
-                <ScanSearch className="w-4 h-4" />
-                {detectando ? "Detectando..." : "Detectar impresoras de Windows"}
-              </button>
-
-              {mostrarDisponibles && (
-                <div className="mt-3">
-                  {disponibles.length === 0 ? (
-                    <p className="text-xs text-[#94a3b8]">
-                      Todas las impresoras instaladas ya están registradas.
-                    </p>
+                <button
+                  type="button"
+                  onClick={handleAgregarManual}
+                  disabled={ocupado || !nuevaImpresora.trim()}
+                  className={PRIMARY}
+                >
+                  {agregando ? (
+                    <Loader2
+                      size={16}
+                      className="animate-spin"
+                    />
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {disponibles.map(d => (
-                        <button
-                          key={d}
-                          onClick={() => handleAgregarDisponible(d)}
-                          disabled={agregando}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#00ABE4] border border-blue-200 rounded-lg text-xs font-medium transition-all duration-200 disabled:opacity-50"
-                        >
-                          <Plus size={12} />
-                          {d}
-                        </button>
-                      ))}
-                    </div>
+                    <Plus size={16} />
                   )}
-                </div>
-              )}
-            </div>
 
-            {/* Auto-impresión */}
-            <div className="flex items-center justify-between py-3 px-4 bg-slate-50 rounded-xl border border-slate-100">
+                  Agregar
+                </button>
+              </div>
+
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={handleDetectar}
+                  disabled={ocupado}
+                  className={OUTLINE}
+                >
+                  {detectando ? (
+                    <Loader2
+                      size={16}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <ScanSearch size={16} />
+                  )}
+
+                  {detectando
+                    ? "Detectando..."
+                    : "Detectar impresoras de Windows"}
+                </button>
+
+                {mostrarDisponibles && (
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-semibold text-slate-600">
+                      Impresoras disponibles ({disponibles.length})
+                    </p>
+
+                    {disponibles.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {disponibles.map(nombre => (
+                          <button
+                            key={nombre}
+                            type="button"
+                            disabled={ocupado}
+                            onClick={() =>
+                              handleAgregarDisponible(nombre)
+                            }
+                            className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-[#0095C5] hover:bg-sky-100 disabled:opacity-50"
+                          >
+                            <Plus size={14} />
+                            {nombre}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
+                        No hay impresoras nuevas para registrar.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          {/* PANEL LATERAL */}
+
+          <div className="space-y-4">
+            <section className={`${CARD} p-4 md:p-5`}>
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <Settings2
+                  size={17}
+                  className="text-[#00ABE4]"
+                />
+                Opciones de impresión
+              </h2>
+
+              <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Impresión automática
+                  </p>
+
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Imprimir automáticamente cuando finalice
+                    cada lote de liquidaciones.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoPrint}
+                  aria-label="Impresión automática"
+                  disabled={ocupado}
+                  onClick={() =>
+                    setAutoPrint(valor => !valor)
+                  }
+                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition-colors disabled:opacity-50 ${
+                    autoPrint
+                      ? "bg-[#00ABE4]"
+                      : "bg-slate-300"
+                  }`}
+                >
+                  <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                    autoPrint
+                      ? "translate-x-5"
+                      : "translate-x-0"
+                  }`} />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={handleGuardar}
+                  disabled={ocupado || (!seleccionada && !printerName)}
+                  className={`${PRIMARY} w-full`}
+                >
+                  {saving ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Save size={16} />
+                  )}
+
+                  {saving
+                    ? "Guardando..."
+                    : "Guardar configuración"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleProbarImpresion}
+                  disabled={ocupado || (!activa && !printerName)}
+                  className={`${OUTLINE} w-full`}
+                >
+                  {testing ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <TestTube size={16} />
+                  )}
+
+                  {testing
+                    ? "Verificando..."
+                    : "Verificar servicio"}
+                </button>
+              </div>
+
+              {hayCambios && (
+                <p className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-700">
+                  <AlertTriangle size={14} />
+                  Hay cambios pendientes por guardar.
+                </p>
+              )}
+            </section>
+
+            {/* AVISO */}
+
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <AlertTriangle
+                size={18}
+                className="mt-0.5 shrink-0 text-amber-600"
+              />
+
               <div>
-                <p className="text-sm font-semibold text-[#1e293b]">Auto-impresión</p>
-                <p className="text-xs text-[#64748b] mt-0.5">
-                  Imprimir automáticamente al finalizar cada batch
+                <p className="text-xs font-bold text-amber-800">
+                  Información de impresión
+                </p>
+
+                <p className="mt-2 text-xs leading-relaxed text-amber-700">
+                  AutoCore puede trabajar con impresoras locales
+                  USB y de red, siempre que sean accesibles desde
+                  el servicio de impresión configurado.
+                </p>
+
+                <p className="mt-2 text-xs leading-relaxed text-amber-700">
+                  Registre cada impresora una sola vez.
+                  La detección de Windows corresponde al equipo
+                  donde se ejecuta el servicio de impresión.
                 </p>
               </div>
-              <button
-                onClick={() => setAutoPrint(!autoPrint)}
-                className={`
-                  inline-flex items-center w-12 h-7 rounded-full p-1 transition-colors duration-200
-                  focus:outline-none focus:ring-0 select-none
-                  [webkit-tap-highlight-color:transparent]
-                  ${autoPrint ? "bg-[#00ABE4]" : "bg-slate-300"}
-                `}
-              >
-                <span
-                  className={`
-                    w-5 h-5 bg-white rounded-full shadow transition-transform duration-200
-                    ${autoPrint ? "translate-x-5" : "translate-x-0"}
-                  `}
-                />
-              </button>
             </div>
           </div>
-
-          <div className="flex items-center gap-3 mt-5 pt-4 border-t border-slate-100">
-            <button
-              onClick={handleGuardar}
-              disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#00ABE4] hover:bg-[#0095C5] text-white rounded-xl text-sm font-semibold transition-all duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed"
-            >
-              <Save className="w-4 h-4" />
-              {saving ? "Guardando..." : "Guardar configuración"}
-            </button>
-
-            <button
-              onClick={handleProbarImpresion}
-              disabled={testing}
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-[#64748b] rounded-xl text-sm font-medium transition-all duration-200 disabled:opacity-50"
-            >
-              <TestTube className="w-4 h-4" />
-              {testing ? "Probando..." : "Probar impresión"}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <p className="text-xs text-amber-700 leading-relaxed">
-            <strong>Nota:</strong> La impresión funciona con impresoras locales (USB) y de red (Wi-Fi/Ethernet).
-            Registre cada impresora una sola vez y luego selecciónela.
-          </p>
         </div>
       </div>
     </div>

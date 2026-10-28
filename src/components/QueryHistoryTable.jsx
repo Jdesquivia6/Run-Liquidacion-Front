@@ -6,7 +6,7 @@ import "swiper/css/pagination";
 import "swiper/css/navigation";
 import StatusBadge from "./StatusBadge";
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 
 function formatFechaColombia(fecha) {
   if (!fecha) return "—";

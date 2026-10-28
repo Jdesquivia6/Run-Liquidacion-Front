@@ -1,32 +1,58 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { obtenerProgresoJob, obtenerDetalleJob, cancelarJob, reintentarFallidos, exportarJobExcel } from "../services/workerJobsApi";
+
+import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  Pause, CheckCircle, XCircle, Clock,
+  AlertTriangle, Loader2, RefreshCw,
+  Download, X, ListChecks, Activity
+} from "lucide-react";
 import toast from "react-hot-toast";
 import {
-  Play, Pause, RotateCcw, CheckCircle, XCircle,
-  Clock, AlertTriangle, Loader2, RefreshCw, Trash2, Download, X
-} from "lucide-react";
+  obtenerProgresoJob,
+  obtenerDetalleJob,
+  cancelarJob,
+  reintentarFallidos,
+  exportarJobExcel
+} from "../services/workerJobsApi";
+
+// ======================================================
+// ESTILOS DE ESTADOS
+// ======================================================
 
 const ESTADO_COLORS = {
-  pendiente: "bg-slate-100 text-slate-600",
-  procesando: "bg-blue-100 text-blue-600",
-  pausado: "bg-amber-100 text-amber-600",
-  finalizado: "bg-emerald-100 text-emerald-600",
-  fallido: "bg-red-100 text-red-600",
-  cancelado: "bg-slate-200 text-slate-500",
-  sesion_vencida: "bg-orange-100 text-orange-600"
+  pendiente: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-600",
+  procesando: "bg-sky-50 text-[#0095C5] border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/20",
+  pausado: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20",
+  finalizado: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+  fallido: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20",
+  cancelado: "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-600",
+  sesion_vencida: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20"
 };
 
 const ITEM_ESTADO_COLORS = {
-  pendiente: "text-slate-500",
-  procesando: "text-blue-500",
-  exitoso: "text-emerald-600",
-  fallido: "text-red-600",
-  sin_informacion: "text-amber-600",
-  timeout: "text-orange-600",
-  sesion_vencida: "text-orange-600"
+  pendiente: "text-slate-500 dark:text-slate-400",
+  procesando: "text-[#0095C5] dark:text-sky-400",
+  exitoso: "text-emerald-600 dark:text-emerald-400",
+  fallido: "text-red-600 dark:text-red-400",
+  sin_informacion: "text-amber-600 dark:text-amber-400",
+  timeout: "text-orange-600 dark:text-orange-400",
+  sesion_vencida: "text-orange-600 dark:text-orange-400"
 };
 
+const ITEM_ICONS = {
+  exitoso: CheckCircle,
+  fallido: XCircle,
+  pendiente: Clock,
+  procesando: Loader2,
+  sin_informacion: AlertTriangle,
+  timeout: AlertTriangle,
+  sesion_vencida: AlertTriangle
+};
+
+const BTN =
+  "inline-flex min-h-11 touch-manipulation items-center justify-center gap-2 rounded-xl border px-3.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+
+// Conservamos la zona horaria original.
 function formatFechaColombia(fecha) {
   if (!fecha) return "—";
 
@@ -38,12 +64,28 @@ function formatFechaColombia(fecha) {
   });
 }
 
-export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = true, refreshInterval = 5000 }) {
+// ======================================================
+// COMPONENTE PRINCIPAL
+// ======================================================
+
+export default function JobProgress({
+  jobId,
+  onClose,
+  onComplete,
+  autoRefresh = true,
+  refreshInterval = 5000
+}) {
+  const reduceMotion = useReducedMotion();
+
   const [job, setJob] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cargandoAccion, setCargandoAccion] = useState(false);
   const [onCompleteCalled, setOnCompleteCalled] = useState(false);
+
+  // ==========================================
+  // LÓGICA ORIGINAL
+  // ==========================================
 
   const cargarDatos = async () => {
     try {
@@ -51,7 +93,7 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
         obtenerProgresoJob(jobId),
         obtenerDetalleJob(jobId)
       ]);
-      
+
       setJob(progresoData.job || progresoData);
       setItems(detalleData.items || []);
     } catch (error) {
@@ -69,21 +111,32 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
 
   useEffect(() => {
     if (!autoRefresh) return;
-    
-    // Solo llamar onComplete una vez cuando el job termina
-    if (job && (job.estado === "finalizado" || job.estado === "fallido") && !onCompleteCalled) {
+
+    if (
+      job &&
+      (job.estado === "finalizado" || job.estado === "fallido") &&
+      !onCompleteCalled
+    ) {
       setOnCompleteCalled(true);
+
       const total = job.total || items.length || 0;
+
       toast.success(
         `Trabajo finalizado — ${job.exitosas || 0} exitosas, ` +
         `${job.fallidas || 0} fallidas de ${total}`,
         { id: `job-done-${jobId}` }
       );
+
       if (onComplete) onComplete(job, items);
       return;
     }
 
-    if (!job || job.estado === "finalizado" || job.estado === "cancelado" || job.estado === "fallido") {
+    if (
+      !job ||
+      job.estado === "finalizado" ||
+      job.estado === "cancelado" ||
+      job.estado === "fallido"
+    ) {
       return;
     }
 
@@ -129,167 +182,273 @@ export default function JobProgress({ jobId, onClose, onComplete, autoRefresh = 
     }
   };
 
+  // ==========================================
+  // ESTADO DE CARGA
+  // ==========================================
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="w-8 h-8 animate-spin text-[#00ABE4]" />
-        <span className="ml-3 text-slate-600">Cargando progreso...</span>
+      <div className="flex min-h-36 items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-[#172539]">
+        <Loader2 size={23} className="animate-spin text-[#00ABE4]" />
+        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+          Cargando progreso...
+        </span>
       </div>
     );
   }
 
   const counters = job || {};
-  const porcentaje = counters.total > 0 ? Math.round((counters.procesadas / counters.total) * 100) : 0;
+
+  const porcentaje = counters.total > 0
+    ? Math.round((counters.procesadas / counters.total) * 100)
+    : 0;
+
+  const pendientes =
+    (counters.total || 0) - (counters.procesadas || 0);
+
+  const estadoColor =
+    ESTADO_COLORS[job?.estado] || ESTADO_COLORS.pendiente;
+
+  // ==========================================
+  // VISTA PRINCIPAL
+  // ==========================================
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-3xl shadow-lg p-6 space-y-4"
+      transition={{ duration: 0.25 }}
+      className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-[#172539]"
     >
-      {/* Header del job */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h3 className="text-xl font-bold text-[#1e293b]">
+      {/* ENCABEZADO */}
+
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-[#0095C5] dark:bg-sky-500/10 dark:text-sky-400">
+              <Activity size={19} />
+            </div>
+
+            <h3 className="break-words text-base font-bold text-slate-900 dark:text-slate-100">
               Trabajo: {job?.modulo}
             </h3>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${ESTADO_COLORS[job?.estado] || "bg-slate-100"}`}>
+
+            <span
+              className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-[11px] font-bold ${estadoColor}`}
+            >
               {job?.estado}
             </span>
           </div>
-          <p className="text-sm text-[#64748b] mt-1">
+
+          <p className="mt-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
             Creado: {formatFechaColombia(job?.created_at)}
-            {job?.started_at && ` | Iniciado: ${formatFechaColombia(job.started_at)}`}
-            {job?.finished_at && ` | Finalizado: ${formatFechaColombia(job.finished_at)}`}
+            {job?.started_at &&
+              ` · Iniciado: ${formatFechaColombia(job.started_at)}`}
+            {job?.finished_at &&
+              ` · Finalizado: ${formatFechaColombia(job.finished_at)}`}
           </p>
         </div>
 
-        {/* Acciones + cerrar */}
+        {/* ACCIONES ORIGINALES */}
+
         <div className="flex flex-wrap items-center gap-2">
-          {job?.estado !== "finalizado" && job?.estado !== "cancelado" && (
-            <button
-              onClick={handleCancelar}
-              disabled={cargandoAccion}
-              className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 transition-colors text-sm font-medium disabled:opacity-50"
-            >
-              <Pause className="w-4 h-4" />
-              Cancelar
-            </button>
-          )}
+
+          {job?.estado !== "finalizado" &&
+            job?.estado !== "cancelado" && (
+              <button
+                type="button"
+                onClick={handleCancelar}
+                disabled={cargandoAccion}
+                className={`${BTN} border-red-100 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400`}
+              >
+                <Pause size={16} />
+                Cancelar
+              </button>
+            )}
 
           {job?.estado === "finalizado" && (
             <>
               {counters.fallidas > 0 && (
                 <button
+                  type="button"
                   onClick={handleReintentar}
                   disabled={cargandoAccion}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-xl hover:bg-amber-200 transition-colors text-sm font-medium disabled:opacity-50"
+                  className={`${BTN} border-amber-100 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400`}
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw size={16} />
                   Reintentar fallidos
                 </button>
               )}
+
               {["personas-direcciones", "ubicabilidad-personas"].includes(job?.modulo) && (
                 <button
+                  type="button"
                   onClick={handleDescargarExcel}
                   disabled={cargandoAccion}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl hover:bg-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
+                  className={`${BTN} border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400`}
                 >
-                  <Download className="w-4 h-4" />
+                  <Download size={16} />
                   Descargar Excel
                 </button>
               )}
             </>
           )}
 
-          {/* Cerrar: el panel es solo monitoreo. Cerrarlo no cancela nada,
-              el worker sigue corriendo en segundo plano. */}
           {onClose && (
             <button
+              type="button"
               onClick={onClose}
               title="Cerrar panel"
               aria-label="Cerrar panel de progreso"
-              className="p-2 rounded-xl text-[#64748b] hover:bg-slate-100 hover:text-[#1e293b] transition-colors"
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700"
             >
-              <X className="w-5 h-5" />
+              <X size={18} />
             </button>
           )}
         </div>
       </div>
 
-      {/* Barra de progreso */}
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-[#64748b]">Progreso</span>
-          <span className="font-semibold text-[#1e293b]">
-            {counters.procesadas || 0} / {counters.total || 0} ({porcentaje}%)
+      {/* PROGRESO */}
+
+      <div className="space-y-2 px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+            Progreso del trabajo
+          </span>
+
+          <span className="text-xs font-bold tabular-nums text-slate-900 dark:text-slate-100">
+            {counters.procesadas || 0} / {counters.total || 0}
+            <span className="ml-2 text-[#0095C5] dark:text-sky-400">
+              ({porcentaje}%)
+            </span>
           </span>
         </div>
-        <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+
+        <div
+          role="progressbar"
+          aria-label="Progreso del trabajo"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={porcentaje}
+          className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700"
+        >
           <motion.div
-            initial={{ width: 0 }}
+            initial={reduceMotion ? false : { width: 0 }}
             animate={{ width: `${porcentaje}%` }}
-            className="h-full bg-gradient-to-r from-[#00ABE4] to-[#0095CC]"
+            transition={{ duration: 0.4 }}
+            className="h-full rounded-full bg-gradient-to-r from-[#00ABE4] to-[#0095C5]"
           />
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
-        <div className="bg-slate-50 rounded-xl p-3 text-center">
-          <p className="text-xs text-slate-500">Total</p>
-          <p className="text-xl font-bold text-slate-700">{counters.total || 0}</p>
-        </div>
-        <div className="bg-emerald-50 rounded-xl p-3 text-center">
-          <p className="text-xs text-emerald-600">Exitosas</p>
-          <p className="text-xl font-bold text-emerald-700">{counters.exitosas || 0}</p>
-        </div>
-        <div className="bg-red-50 rounded-xl p-3 text-center">
-          <p className="text-xs text-red-600">Fallidas</p>
-          <p className="text-xl font-bold text-red-700">{counters.fallidas || 0}</p>
-        </div>
-        <div className="bg-amber-50 rounded-xl p-3 text-center">
-          <p className="text-xs text-amber-600">Pendientes</p>
-          <p className="text-xl font-bold text-amber-700">{(counters.total || 0) - (counters.procesadas || 0)}</p>
-        </div>
+      {/* INDICADORES */}
+
+      <div className="grid grid-cols-2 gap-2.5 px-4 pb-4 sm:grid-cols-4 sm:gap-3 sm:px-5">
+
+        {[
+          {
+            label: "Total",
+            value: counters.total || 0,
+            color: "bg-slate-50 text-slate-700 dark:bg-[#111F32] dark:text-slate-200",
+            labelColor: "text-slate-500 dark:text-slate-400"
+          },
+          {
+            label: "Exitosas",
+            value: counters.exitosas || 0,
+            color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+            labelColor: "text-emerald-600 dark:text-emerald-400"
+          },
+          {
+            label: "Fallidas",
+            value: counters.fallidas || 0,
+            color: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
+            labelColor: "text-red-600 dark:text-red-400"
+          },
+          {
+            label: "Pendientes",
+            value: pendientes,
+            color: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+            labelColor: "text-amber-600 dark:text-amber-400"
+          }
+        ].map(stat => (
+          <div
+            key={stat.label}
+            className={`rounded-xl px-3 py-3 text-center ${stat.color}`}
+          >
+            <p className={`text-[11px] font-semibold ${stat.labelColor}`}>
+              {stat.label}
+            </p>
+            <p className="mt-1 text-xl font-extrabold tabular-nums">
+              {stat.value}
+            </p>
+          </div>
+        ))}
       </div>
 
-      {/* Lista de items */}
+      {/* ELEMENTOS PROCESADOS */}
+
       {items.length > 0 && (
-        <div className="mt-4">
-          <h4 className="text-sm font-semibold text-[#1e293b] mb-2">Items</h4>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {items.map((item) => (
-              <div
-                key={item.id_item}
-                className="flex items-center justify-between p-3 bg-slate-50 rounded-xl text-sm"
-              >
-                <div className="flex items-center gap-3">
-                  {item.placa && (
-                    <span className="font-mono font-semibold text-[#1e293b]">
-                      {item.placa}
+        <div className="border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ListChecks size={17} className="text-[#0095C5] dark:text-sky-400" />
+
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Ítems del trabajo
+              </h4>
+            </div>
+
+            <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:bg-[#111F32] dark:text-slate-300">
+              {items.length}
+            </span>
+          </div>
+
+          <div className="max-h-64 space-y-2 overflow-y-auto overscroll-contain pr-1">
+            {items.map(item => {
+              const Icon = ITEM_ICONS[item.estado];
+
+              return (
+                <div
+                  key={item.id_item}
+                  className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-[#111F32]"
+                >
+                  <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                    {item.placa && (
+                      <span className="font-mono text-[13px] font-bold text-slate-800 dark:text-slate-100">
+                        {item.placa}
+                      </span>
+                    )}
+
+                    {item.documento && (
+                      <span className="break-all font-mono text-xs text-slate-500 dark:text-slate-400">
+                        {item.documento}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    {Icon && (
+                      <Icon
+                        size={16}
+                        className={`${
+                          ITEM_ESTADO_COLORS[item.estado] ||
+                          "text-slate-500 dark:text-slate-400"
+                        } ${item.estado === "procesando" ? "animate-spin" : ""}`}
+                      />
+                    )}
+
+                    <span
+                      className={`text-xs font-semibold ${
+                        ITEM_ESTADO_COLORS[item.estado] ||
+                        "text-slate-500 dark:text-slate-400"
+                      }`}
+                    >
+                      {item.estado}
                     </span>
-                  )}
-                  {item.documento && (
-                    <span className="font-mono text-slate-600 text-xs">
-                      {item.documento}
-                    </span>
-                  )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {item.estado === "exitoso" && <CheckCircle className="w-4 h-4 text-emerald-500" />}
-                  {item.estado === "fallido" && <XCircle className="w-4 h-4 text-red-500" />}
-                  {item.estado === "pendiente" && <Clock className="w-4 h-4 text-slate-400" />}
-                  {item.estado === "procesando" && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
-                  {item.estado === "sin_informacion" && <AlertTriangle className="w-4 h-4 text-amber-500" />}
-                  {item.estado === "sesion_vencida" && <AlertTriangle className="w-4 h-4 text-orange-500" />}
-                  <span className={`font-medium ${ITEM_ESTADO_COLORS[item.estado]}`}>
-                    {item.estado}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
